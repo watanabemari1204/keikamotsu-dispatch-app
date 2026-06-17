@@ -23,10 +23,10 @@ const wavePlan = [
 ];
 
 const runPlans = [
-  { run: 1, load: "06:45", depart: "07:15", area: "三田一丁目→芝三丁目", parcels: 66, returnBy: "10:35", target: "午前指定を先に処理" },
-  { run: 2, load: "10:50", depart: "11:05", area: "芝三丁目→三田一丁目", parcels: 64, returnBy: "13:34", target: "14時前に勝島へ戻る" },
-  { run: 3, load: "14:05", depart: "14:25", area: "三田一丁目→芝三丁目", parcels: 66, returnBy: "17:20", target: "最終便を取り切る" },
-  { run: 4, load: "17:30", depart: "17:45", area: "近場のみ 三田/芝", parcels: 38, returnBy: "19:10", target: "稼ぐ日だけ追加" }
+  { run: 1, load: "06:45", depart: "07:15", area: "三田一丁目→芝三丁目", parcels: 70, returnBy: "10:35", target: "午前指定を先に処理" },
+  { run: 2, load: "10:50", depart: "11:05", area: "芝三丁目→三田一丁目", parcels: 70, returnBy: "13:34", target: "14時前に勝島へ戻る" },
+  { run: 3, load: "14:05", depart: "14:25", area: "三田一丁目→芝三丁目", parcels: 70, returnBy: "17:20", target: "最終便を取り切る" },
+  { run: 4, load: "17:30", depart: "17:45", area: "近場のみ 三田/芝", parcels: 40, returnBy: "19:10", target: "稼ぐ日だけ追加" }
 ];
 
 let runMode = 4;
@@ -279,6 +279,19 @@ function getUnitPrice() {
   return Number($("#parcelUnitPrice")?.value || 180);
 }
 
+function parcelsForRun(run) {
+  const input = $(`#run${run}Parcels`);
+  const plan = runPlans.find((item) => item.run === run);
+  const value = Number(input?.value || plan?.parcels || 0);
+  return Math.max(run === 4 ? 0 : 1, Math.min(140, value));
+}
+
+function totalPlannedParcels() {
+  return runPlans
+    .filter((plan) => plan.run <= runMode)
+    .reduce((sum, plan) => sum + parcelsForRun(plan.run), 0);
+}
+
 function formatClock(minutes) {
   const hour = String(Math.floor(minutes / 60)).padStart(2, "0");
   const minute = String(minutes % 60).padStart(2, "0");
@@ -398,10 +411,9 @@ function estimateRunReturn(run) {
 }
 
 function deliveryMinutesForRun(run) {
-  const plan = runPlans.find((item) => item.run === run);
   const targets = run <= 3 ? waveStops(run) : orderedStops.filter((stop) => stop.wave === 3).slice(-4);
   const stopCount = Math.max(1, targets.length || (run === 4 ? 4 : 3));
-  const parcelHandling = Math.round(plan.parcels * (run === 4 ? 0.55 : 0.52));
+  const parcelHandling = Math.round(parcelsForRun(run) * (run === 4 ? 0.55 : 0.52));
   const officeReception = stopCount * (run === 4 ? 6 : 8);
   return parcelHandling + officeReception;
 }
@@ -415,7 +427,7 @@ function runTimeBreakdown(run) {
   const localMoveMinutes = run === 4 ? 14 : 22;
   const returnToDepotMinutes = run === 4 ? 0 : 22;
   return {
-    parcels: plan.parcels,
+    parcels: parcelsForRun(run),
     deliveryMinutes,
     outboundMinutes,
     localMoveMinutes,
@@ -630,7 +642,7 @@ function renderDriverSimulation() {
     return acc;
   }, {});
   const topBlocker = Object.entries(blockerCounts).sort((a, b) => b[1] - a[1])[0];
-  const earningStable = Math.round(loadOk / 100 * runPlans[3].parcels * getUnitPrice());
+  const earningStable = Math.round(loadOk / 100 * parcelsForRun(4) * getUnitPrice());
 
   $("#driverSimBadge").textContent = `${loadOk}/100回 4便積込OK`;
   $("#driverSimSummary").innerHTML = `
@@ -674,9 +686,9 @@ function renderRoundTrips() {
   const timeline = currentOperatingTimeline();
   const reloadOnly = Number($("#bufferMinutes")?.value || 15);
   const workStart = minutesFromTime($("#workStartTime")?.value || "05:30");
-  const totalParcels = activeRuns.reduce((sum, plan) => sum + plan.parcels, 0);
+  const totalParcels = activeRuns.reduce((sum, plan) => sum + parcelsForRun(plan.run), 0);
   const totalSales = totalParcels * getUnitPrice();
-  const extraSales = runPlans[3].parcels * getUnitPrice();
+  const extraSales = parcelsForRun(4) * getUnitPrice();
   const secondReturn = timeline[1]?.returnTime || estimateRunReturn(2);
   const sameDayLoadReturn = timeline[2]?.returnTime || estimateRunReturn(3);
   const sameDayLoadOk = sameDayLoadReturn <= minutesFromTime(sameDayLoadDeadline);
@@ -702,7 +714,7 @@ function renderRoundTrips() {
     const card = document.createElement("article");
     card.className = `run-card ${danger ? "late" : ""}`;
     card.innerHTML = `
-      <div><strong>${plan.run}往復目</strong><span>${plan.parcels}個</span></div>
+      <div><strong>${plan.run}往復目</strong><span>${parcelsForRun(plan.run)}個</span></div>
       <p>${timeText}</p>
       <small>${plan.area} / ${plan.target}</small>
     `;
@@ -1242,7 +1254,8 @@ function renderRouteAdvisor() {
 function renderMetrics() {
   const totalKm = orderedStops.reduce((sum, stop) => sum + stop.distance, 0);
   const totalWeight = orderedStops.reduce((sum, stop) => sum + stop.weight, 0);
-  const totalParcels = orderedStops.reduce((sum, stop) => sum + (stop.parcels || 1), 0);
+  const listedParcels = orderedStops.reduce((sum, stop) => sum + (stop.parcels || 1), 0);
+  const totalParcels = totalPlannedParcels();
   const unitPrice = getUnitPrice();
   const totalFee = totalParcels * unitPrice;
   const breakMinutes = Number($("#breakMinutes")?.value || 45);
@@ -1255,9 +1268,9 @@ function renderMetrics() {
   $("#returnStatus").textContent = returnOk ? "OK" : "要調整";
   $("#returnHint").textContent = `${formatClock(returnMinutes)} 2便後の勝島戻り見込み`;
   $("#parcelTotal").textContent = `${totalParcels}個`;
-  $("#loadRate").textContent = `1個${unitPrice}円 / 最大便 ${Math.max(...wavePlan.map((plan) => waveStops(plan.wave).reduce((sum, stop) => sum + (stop.parcels || 1), 0)))}個`;
+  $("#loadRate").textContent = `1個${unitPrice}円 / 最大便 ${Math.max(...runPlans.filter((plan) => plan.run <= runMode).map((plan) => parcelsForRun(plan.run)))}個 / リスト ${listedParcels}個`;
   $("#centerReturnBadge").textContent = `${$("#centerName")?.value || "勝島集積所"} 2便後 ${formatClock(returnMinutes)} 戻り`;
-  $("#driverStatus").textContent = `${totalParcels}個 / ${runMode}便 / 2便後14:00勝島判定`;
+  $("#driverStatus").textContent = `${totalPlannedParcels()}個 / ${runMode}便 / 2便後14:00勝島判定`;
   $("#earningForecast").textContent = `単価 ${unitPrice}円 / 見込み売上 ${yen.format(totalFee)}、走行 ${totalKm.toFixed(1)}km、燃料控除後 ${yen.format(totalFee - Math.round(totalKm * 122))}`;
   renderAchievement();
   renderFuelPlan();
@@ -1268,11 +1281,11 @@ function completedParcelsByNow() {
   const current = now.getHours() * 60 + now.getMinutes();
   return runPlans
     .filter((plan) => plan.run <= runMode)
-    .reduce((sum, plan) => current >= estimateRunReturn(plan.run) ? sum + plan.parcels : sum, 0);
+    .reduce((sum, plan) => current >= estimateRunReturn(plan.run) ? sum + parcelsForRun(plan.run) : sum, 0);
 }
 
 function renderAchievement() {
-  const plannedParcels = runPlans.filter((plan) => plan.run <= runMode).reduce((sum, plan) => sum + plan.parcels, 0);
+  const plannedParcels = totalPlannedParcels();
   const done = Math.min(plannedParcels, completedParcelsByNow());
   const rate = plannedParcels ? Math.round(done / plannedParcels * 100) : 0;
   $("#achievementRate").textContent = `${rate}%`;
@@ -1958,6 +1971,9 @@ $("#workStartTime").addEventListener("input", renderAll);
 $("#oldLoadMinutes").addEventListener("input", renderAll);
 $("#aiLoadMinutes").addEventListener("input", renderAll);
 $("#bufferMinutes").addEventListener("input", renderAll);
+["#run1Parcels", "#run2Parcels", "#run3Parcels", "#run4Parcels"].forEach((selector) => {
+  $(selector)?.addEventListener("input", renderAll);
+});
 $("#startCamera").addEventListener("click", startCamera);
 $("#captureParcel").addEventListener("click", captureParcel);
 $("#bulkVideoScan").addEventListener("click", bulkVideoScan);
