@@ -67,7 +67,8 @@ let liveBaseLayer;
 let scanMap;
 let scanMapLayer;
 let scanBaseLayer;
-let scanMapShowAllPins = false;
+let scanMapShowAllPins = true;
+let scanMapWaveFilter = "all";
 let lastScanGroups = [];
 let lastScanReads = [];
 let activeMapRoute = [];
@@ -1598,19 +1599,118 @@ function renderVideoScanResults(items, routeText, rawReads = []) {
   });
 }
 
+function scanWaveName(wave) {
+  if (wave === "all") return "全体";
+  return `${wave}便`;
+}
+
+function scanWaveColor(wave) {
+  return {
+    1: "#d83b3b",
+    2: "#d4a017",
+    3: "#1f7ae0",
+    4: "#138a55"
+  }[wave] || "#172532";
+}
+
+function filteredScanReads(rawReads = []) {
+  if (scanMapWaveFilter === "all") return rawReads;
+  return rawReads.filter((read) => String(read.wave) === scanMapWaveFilter);
+}
+
+function filteredScanGroups(groups = []) {
+  if (scanMapWaveFilter === "all") return groups;
+  return groups.filter((group) => String(group.wave) === scanMapWaveFilter);
+}
+
+function currentScanWaveReads(rawReads = []) {
+  const reads = filteredScanReads(rawReads);
+  if (reads.length || scanMapWaveFilter !== "all") return reads;
+  return rawReads.filter((read) => read.wave === 1);
+}
+
+function renderScanWaveDashboard(groups = [], rawReads = []) {
+  const dashboard = $("#scanWaveDashboard");
+  if (!dashboard) return;
+  if (!rawReads.length && !groups.length) {
+    dashboard.innerHTML = "<strong>読み取り後、便ごとの現在地と次の配送先を表示します</strong>";
+    return;
+  }
+
+  const selectedReads = currentScanWaveReads(rawReads);
+  const selectedGroups = filteredScanGroups(groups);
+  const nextRead = selectedReads[0];
+  const totalParcels = selectedReads.length || selectedGroups.reduce((sum, group) => sum + group.parcels, 0);
+  const waveLabel = scanWaveName(scanMapWaveFilter);
+  const waveCounts = [1, 2, 3, 4].map((wave) => ({
+    wave,
+    count: rawReads.filter((read) => read.wave === wave).length || groups.filter((group) => group.wave === wave).reduce((sum, group) => sum + group.parcels, 0)
+  }));
+  const nextText = nextRead
+    ? `${nextRead.code} ${nextRead.address} / ${loadColorLabel(nextRead.loadColor)} ${loadColorName(nextRead.loadColor)}`
+    : "束単位のナビ候補を表示中";
+  dashboard.innerHTML = `
+    <div>
+      <strong>${waveLabel}を表示中: ${totalParcels}個</strong>
+      <span>次: ${nextText}</span>
+    </div>
+    <div class="scan-wave-counts">
+      ${waveCounts.map((item) => `<span style="--wave-color:${scanWaveColor(item.wave)}">${item.wave}便 ${item.count}個</span>`).join("")}
+    </div>
+  `;
+}
+
+function updateScanWaveButtons() {
+  document.querySelectorAll("[data-scan-wave]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.scanWave === scanMapWaveFilter);
+  });
+}
+
+function scanRouteStopsForNavigation(groups = []) {
+  const targetGroups = filteredScanGroups(groups);
+  if (!targetGroups.length) return [];
+  return [
+    { name: depot.name, address: depot.address, lat: depot.lat, lng: depot.lng, isDepot: true },
+    ...targetGroups,
+    { name: depot.name, address: depot.address, lat: depot.lat, lng: depot.lng, isDepot: true }
+  ];
+}
+
+function googleMapsUrlForScanWave() {
+  const routeStops = scanRouteStopsForNavigation(lastScanGroups);
+  if (!routeStops.length) return "";
+  const origin = encodeURIComponent(routePointForMaps(routeStops[0]));
+  const destination = encodeURIComponent(routePointForMaps(routeStops[routeStops.length - 1]));
+  const waypoints = routeStops.slice(1, -1).map((stop) => encodeURIComponent(routePointForMaps(stop))).join("|");
+  return `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}${waypoints ? `&waypoints=${waypoints}` : ""}&travelmode=driving&avoid=tolls`;
+}
+
+function openScanWaveNavigation() {
+  const url = googleMapsUrlForScanWave();
+  if (!url) {
+    $("#scanStatus").textContent = "先に映像読取または400個連続読取を実行してください";
+    return;
+  }
+  window.open(url, "_blank", "noopener");
+}
+
 function renderScanDetailMap(groups = [], rawReads = []) {
   const canvas = $("#scanMap");
   if (!canvas) return;
+  const mapGroups = filteredScanGroups(groups);
+  const mapReads = filteredScanReads(rawReads);
   const routeStops = [
     { name: depot.name, area: "勝島", lat: depot.lat, lng: depot.lng, isDepot: true },
-    ...groups,
+    ...mapGroups,
     { name: depot.name, area: "勝島", lat: depot.lat, lng: depot.lng, isDepot: true }
   ];
-  const visibleReads = scanMapShowAllPins ? rawReads : rawReads.slice(0, 80);
+  const visibleReads = scanMapShowAllPins ? mapReads : mapReads.slice(0, 80);
   $("#scanMapStatus").textContent = rawReads.length
-    ? `個別地点 ${rawReads.length}件 / 地図表示 ${visibleReads.length}点 / 集約 ${groups.length}束${scanMapShowAllPins ? " / 全ピン表示中" : " / 軽量表示"}`
-    : `集約 ${groups.length}束を表示`;
-  $("#toggleAllScanPins").textContent = scanMapShowAllPins ? "軽量表示に戻す" : "全ピン表示";
+    ? `${scanWaveName(scanMapWaveFilter)} / 個別地点 ${mapReads.length}件 / 地図表示 ${visibleReads.length}点 / 集約 ${mapGroups.length}束${scanMapShowAllPins ? " / 全ピン表示中" : " / 軽量表示"}`
+    : `${scanWaveName(scanMapWaveFilter)} / 集約 ${mapGroups.length}束を表示`;
+  $("#toggleAllScanPins").textContent = scanMapShowAllPins ? "軽量表示" : "全ピン表示";
+  updateScanWaveButtons();
+  renderScanWaveDashboard(groups, rawReads);
 
   if (!window.L) {
     canvas.innerHTML = "<div class=\"map-fallback\">地図ライブラリ読込後に配送地点を表示します</div>";
@@ -1640,15 +1740,16 @@ function renderScanDetailMap(groups = [], rawReads = []) {
 
   visibleReads.forEach((read) => {
     L.circleMarker([read.lat, read.lng], {
-      radius: 3,
-      color: loadColorHex(read.loadColor),
+      radius: scanMapWaveFilter === "all" ? 3 : 4.5,
+      color: scanWaveColor(read.wave),
       weight: 1,
-      fillOpacity: 0.58
-    }).bindPopup(`${read.code}<br>${read.address}<br>${loadColorLabel(read.loadColor)} ${loadColorName(read.loadColor)}<br>${read.wave}便 / ${read.deadline}`).addTo(scanMapLayer);
+      fillColor: loadColorHex(read.loadColor),
+      fillOpacity: scanMapWaveFilter === "all" ? 0.58 : 0.82
+    }).bindPopup(`${read.code}<br>${read.address}<br>${read.wave}便 / ${read.deadline}<br>${loadColorLabel(read.loadColor)} ${loadColorName(read.loadColor)}`).addTo(scanMapLayer);
   });
 
   L.polyline(routeStops.map((stop) => [stop.lat, stop.lng]), {
-    color: "#172532",
+    color: scanWaveColor(Number(scanMapWaveFilter)),
     weight: 4,
     opacity: 0.72
   }).addTo(scanMapLayer);
@@ -1658,7 +1759,7 @@ function renderScanDetailMap(groups = [], rawReads = []) {
       radius: stop.isDepot ? 9 : 8,
       color: "#ffffff",
       weight: 3,
-      fillColor: stop.isDepot ? "#172532" : "#0f8b8d",
+      fillColor: stop.isDepot ? "#172532" : scanWaveColor(stop.wave),
       fillOpacity: 1
     }).bindPopup(stop.isDepot ? "勝島集積所" : `${stop.address}<br>${stop.parcels}個 / ${stop.wave}便 / ${stop.deadline}`).addTo(scanMapLayer);
     L.marker([stop.lat, stop.lng], {
@@ -1674,7 +1775,9 @@ function renderScanDetailMap(groups = [], rawReads = []) {
 
   const boundsPoints = [...routeStops, ...visibleReads].map((point) => [point.lat, point.lng]);
   scanMap.invalidateSize();
-  scanMap.fitBounds(L.latLngBounds(boundsPoints), { padding: [24, 24], maxZoom: 15 });
+  if (boundsPoints.length) {
+    scanMap.fitBounds(L.latLngBounds(boundsPoints), { padding: [24, 24], maxZoom: scanMapWaveFilter === "all" ? 15 : 16 });
+  }
   setTimeout(() => scanMap.invalidateSize(), 120);
 }
 
@@ -2015,6 +2118,7 @@ document.querySelectorAll(".nav-item").forEach((button) => {
 });
 
 window.googleMapsRouteUrl = googleMapsRouteUrl;
+window.googleMapsScanRouteUrl = googleMapsUrlForScanWave;
 
 document.querySelectorAll("[data-mobile-panel]").forEach((button) => {
   button.addEventListener("click", () => {
@@ -2087,6 +2191,13 @@ $("#toggleAllScanPins").addEventListener("click", () => {
   scanMapShowAllPins = !scanMapShowAllPins;
   renderScanDetailMap(lastScanGroups, lastScanReads);
 });
+document.querySelectorAll("[data-scan-wave]").forEach((button) => {
+  button.addEventListener("click", () => {
+    scanMapWaveFilter = button.dataset.scanWave;
+    renderScanDetailMap(lastScanGroups, lastScanReads);
+  });
+});
+$("#scanWaveNavigate").addEventListener("click", openScanWaveNavigation);
 $("#viewScannedRoute").addEventListener("click", () => {
   document.querySelector('[data-panel="dashboard"]')?.click();
   setTimeout(forceVisibleMapSync, 400);

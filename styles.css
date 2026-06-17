@@ -1121,6 +1121,89 @@ button {
   margin-bottom: 10px;
 }
 
+.scan-wave-control {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.scan-wave-control button {
+  min-height: 38px;
+  border: 1px solid #cdd8e2;
+  border-radius: 8px;
+  background: #f7fafc;
+  color: var(--muted);
+  font-weight: 900;
+}
+
+.scan-wave-control button.active {
+  border-color: #172532;
+  background: #172532;
+  color: white;
+}
+
+.scan-map-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.scan-wave-dashboard {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 10px;
+  border: 1px solid #dbe4ec;
+  border-radius: 8px;
+  padding: 10px;
+  background: #f8fbfc;
+}
+
+.scan-wave-dashboard strong,
+.scan-wave-dashboard span {
+  display: block;
+}
+
+.scan-wave-dashboard strong {
+  color: var(--ink);
+}
+
+.scan-wave-dashboard span {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.scan-wave-counts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.scan-wave-counts span {
+  border-left: 4px solid var(--wave-color);
+  border-radius: 6px;
+  padding: 6px 8px;
+  background: white;
+  color: var(--ink);
+}
+
+@media (max-width: 520px) {
+  .scan-wave-control {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .scan-map-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .scan-wave-counts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 .scan-map-head strong {
   color: var(--ink);
 }

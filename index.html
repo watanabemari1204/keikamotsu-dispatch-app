@@ -16,7 +16,7 @@
       integrity="sha256-p4NxAoJBhIINfQvQbM+TgGyEoYOY0O5pYf67R7sQ4hA="
       crossorigin=""
     />
-    <link rel="stylesheet" href="./styles.css?v=allpins39" />
+    <link rel="stylesheet" href="./styles.css?v=wavefilter42" />
   </head>
   <body>
     <div class="app-shell">
@@ -443,7 +443,20 @@
                   <strong>読取地点マップ</strong>
                   <span id="scanMapStatus">400個モード実行後に地点を表示</span>
                 </div>
-                <button class="secondary-button full" id="toggleAllScanPins" type="button">全ピン表示</button>
+                <div class="scan-wave-control" aria-label="地図の表示便">
+                  <button class="active" data-scan-wave="all" type="button">全体</button>
+                  <button data-scan-wave="1" type="button">1便</button>
+                  <button data-scan-wave="2" type="button">2便</button>
+                  <button data-scan-wave="3" type="button">3便</button>
+                  <button data-scan-wave="4" type="button">4便</button>
+                </div>
+                <div class="scan-map-actions">
+                  <button class="secondary-button" id="toggleAllScanPins" type="button">軽量表示</button>
+                  <button class="primary-button" id="scanWaveNavigate" type="button">表示中の便をナビ</button>
+                </div>
+                <div class="scan-wave-dashboard" id="scanWaveDashboard">
+                  <strong>読み取り後、便ごとの現在地と次の配送先を表示します</strong>
+                </div>
                 <div class="scan-map" id="scanMap" aria-label="読み取り配送地点マップ">
                   <div class="map-fallback">読み取り後、三田一丁目・芝三丁目の配送地点をここに表示します</div>
                 </div>
@@ -577,7 +590,7 @@
       integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
       crossorigin=""
     ></script>
-    <script src="./app.js?v=allpins39"></script>
+    <script src="./app.js?v=wavefilter42"></script>
     <script>
       if ("serviceWorker" in navigator && location.protocol !== "file:") {
         window.addEventListener("load", () => {
