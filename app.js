@@ -533,6 +533,142 @@ function renderSimulation() {
   });
 }
 
+function driverRunDelay(seed, min, max) {
+  const value = Math.sin(seed * 999.91) * 10000;
+  const ratio = value - Math.floor(value);
+  return Math.round(min + ratio * (max - min));
+}
+
+function simulateDriverDay(index) {
+  const aiLoad = Number($("#aiLoadMinutes")?.value || 90);
+  const reloadOnly = Number($("#bufferMinutes")?.value || 15);
+  const workStart = minutesFromTime($("#workStartTime")?.value || "05:30");
+  const advice = routeAdvice();
+  const weather = $("#weatherMode")?.value || "cloudy";
+  const weatherBoost = weather === "storm" ? 5 : weather === "rain" ? 3 : weather === "cloudy" ? 0 : 0;
+  const gotobiBoost = todayProfile().isGotobi ? 3 : 0;
+  const trafficBase = Math.max(0, Math.round((advice.score - 55) / 10));
+  const activeRuns = runPlans.filter((plan) => plan.run <= runMode);
+  const morningVariance = driverRunDelay(index * 11 + 1, -10, 12) + driverRunDelay(index * 13 + 2, 0, 3);
+  let nextDepart = workStart + aiLoad + morningVariance;
+  let trafficTotal = 0;
+  let parkingTotal = 0;
+  let receptionTotal = 0;
+  let fatigueTotal = 0;
+  const timeline = activeRuns.map((plan) => {
+    const loadSlip = plan.run === 1 ? 0 : driverRunDelay(index * 17 + plan.run, 0, 7);
+    let depart = plan.run === 1 ? nextDepart : nextDepart + reloadOnly + loadSlip;
+    if (plan.run === 4) {
+      depart = Math.max(depart, minutesFromTime(sameDayLoadDeadline) + reloadOnly + loadSlip);
+    }
+    const breakdown = runTimeBreakdown(plan.run);
+    const trafficSlip = Math.max(0, trafficBase + weatherBoost + gotobiBoost + driverRunDelay(index * 19 + plan.run, -5, 6));
+    const parkingSlip = driverRunDelay(index * 23 + plan.run, 0, plan.run === 4 ? 2 : 3);
+    const receptionSlip = driverRunDelay(index * 29 + plan.run, 0, plan.run === 1 ? 4 : 3);
+    const fatigueSlip = plan.run >= 3 ? driverRunDelay(index * 31 + plan.run, 0, 2) : 0;
+    trafficTotal += trafficSlip;
+    parkingTotal += parkingSlip;
+    receptionTotal += receptionSlip;
+    fatigueTotal += fatigueSlip;
+    const deliveryFinish = depart
+      + breakdown.outboundMinutes
+      + breakdown.localMoveMinutes
+      + breakdown.deliveryMinutes
+      + breakdown.trafficExtra
+      + trafficSlip
+      + parkingSlip
+      + receptionSlip
+      + fatigueSlip;
+    const returnSlip = plan.run === 4 ? 0 : driverRunDelay(index * 37 + plan.run, 0, 4);
+    const returnTime = deliveryFinish + breakdown.returnToDepotMinutes + returnSlip;
+    nextDepart = returnTime;
+    return { run: plan.run, depart, deliveryFinish, returnTime };
+  });
+  const run2Return = timeline[1]?.returnTime || 0;
+  const run3Return = timeline[2]?.returnTime || 0;
+  const finalTime = timeline[timeline.length - 1]?.returnTime || 0;
+  const reasonScores = [
+    { key: "渋滞", value: trafficTotal },
+    { key: "駐車", value: parkingTotal },
+    { key: "受付待ち", value: receptionTotal },
+    { key: "朝作業", value: Math.max(0, morningVariance) },
+    { key: "疲労", value: fatigueTotal }
+  ].sort((a, b) => b.value - a.value);
+  return {
+    index,
+    timeline,
+    run2Return,
+    run3Return,
+    finalTime,
+    run2Ok: run2Return <= minutesFromTime("14:00"),
+    fourthLoadOk: runMode === 4 ? run3Return <= minutesFromTime(sameDayLoadDeadline) : true,
+    finalOk: runMode === 4 ? finalTime <= minutesFromTime("17:30") : finalTime <= minutesFromTime("15:30"),
+    blocker: reasonScores[0].key,
+    trafficTotal,
+    parkingTotal,
+    receptionTotal,
+    morningVariance,
+    fatigueTotal
+  };
+}
+
+function renderDriverSimulation() {
+  const panel = $("#driverSimulation");
+  if (!panel) return;
+  try {
+  const results = Array.from({ length: 100 }, (_, index) => simulateDriverDay(index + 1));
+  const loadOk = results.filter((item) => item.fourthLoadOk).length;
+  const run2Ok = results.filter((item) => item.run2Ok).length;
+  const finalOk = results.filter((item) => item.finalOk).length;
+  const avgRun3Return = Math.round(results.reduce((sum, item) => sum + item.run3Return, 0) / results.length);
+  const avgFinal = Math.round(results.reduce((sum, item) => sum + item.finalTime, 0) / results.length);
+  const sortedRun3 = [...results].sort((a, b) => a.run3Return - b.run3Return);
+  const p80Run3 = sortedRun3[79].run3Return;
+  const worst = [...results].sort((a, b) => b.run3Return - a.run3Return)[0];
+  const blockerCounts = results.reduce((acc, item) => {
+    acc[item.blocker] = (acc[item.blocker] || 0) + 1;
+    return acc;
+  }, {});
+  const topBlocker = Object.entries(blockerCounts).sort((a, b) => b[1] - a[1])[0];
+  const earningStable = Math.round(loadOk / 100 * runPlans[3].parcels * getUnitPrice());
+
+  $("#driverSimBadge").textContent = `${loadOk}/100回 4便積込OK`;
+  $("#driverSimSummary").innerHTML = `
+    <strong>${loadOk}%の確率で14:30までに勝島へ戻れる想定</strong>
+    <span>平均3便後戻り ${formatClock(avgRun3Return)} / 80%ライン ${formatClock(p80Run3)} / 最終平均 ${formatClock(avgFinal)}</span>
+    <span>4便を取りにいける期待上乗せ ${yen.format(earningStable)}。一番多い詰まり要因は ${topBlocker[0]} ${topBlocker[1]}回。</span>
+  `;
+
+  const grid = $("#driverSimGrid");
+  grid.innerHTML = "";
+  [
+    { label: "2便後14時", value: `${run2Ok}%`, note: "2便後に勝島へ戻れる率" },
+    { label: "4便積込14:30", value: `${loadOk}%`, note: "3便後に勝島へ戻れる率" },
+    { label: "全便完了", value: `${finalOk}%`, note: "4便まで無理なく終える率" },
+    { label: "最悪ケース", value: formatClock(worst.run3Return), note: `${worst.index}回目 / 主因 ${worst.blocker}` }
+  ].forEach((item) => {
+    const card = document.createElement("article");
+    card.className = `driver-sim-card ${item.value.includes("%") && Number(item.value.replace("%", "")) < 80 ? "warn" : ""}`;
+    card.innerHTML = `<span>${item.label}</span><strong>${item.value}</strong><small>${item.note}</small>`;
+    grid.appendChild(card);
+  });
+
+  const samples = [results[0], results[19], results[39], results[59], results[79], results[99]];
+  const log = $("#driverSimLog");
+  log.innerHTML = samples.map((item) => `
+    <div>
+      <strong>${item.index}回目</strong>
+      <span>2便後 ${formatClock(item.run2Return)} / 4便積込戻り ${formatClock(item.run3Return)} / 最終 ${formatClock(item.finalTime)} / ${item.fourthLoadOk ? "4便OK" : "4便危険"}</span>
+    </div>
+  `).join("");
+  } catch (error) {
+    $("#driverSimBadge").textContent = "再計算が必要";
+    $("#driverSimSummary").innerHTML = `<strong>100回シミュレーションを表示できませんでした</strong><span>${error.message}</span>`;
+    $("#driverSimGrid").innerHTML = "";
+    $("#driverSimLog").innerHTML = "";
+  }
+}
+
 function renderRoundTrips() {
   const activeRuns = runPlans.filter((plan) => plan.run <= runMode);
   const timeline = currentOperatingTimeline();
@@ -1183,6 +1319,7 @@ function renderAll() {
   renderRoundTrips();
   renderMorningPlan();
   renderSimulation();
+  renderDriverSimulation();
   renderStops();
   renderWavePlan();
   renderMap();

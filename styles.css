@@ -1743,6 +1743,108 @@ label input {
   font-weight: 900;
 }
 
+.driver-sim-panel {
+  margin-top: 14px;
+  border: 1px solid rgba(37, 99, 235, 0.22);
+  border-radius: 8px;
+  padding: 14px;
+  background: #f7faff;
+}
+
+.driver-sim-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.driver-sim-head h3 {
+  margin: 2px 0 0;
+}
+
+.driver-sim-head strong {
+  border-radius: 8px;
+  padding: 9px 12px;
+  background: #eef4ff;
+  color: var(--route);
+}
+
+.driver-sim-summary {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+  border-left: 5px solid var(--route);
+  border-radius: 8px;
+  padding: 12px;
+  background: white;
+}
+
+.driver-sim-summary strong,
+.driver-sim-summary span {
+  display: block;
+}
+
+.driver-sim-summary span {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.5;
+}
+
+.driver-sim-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.driver-sim-card {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  background: white;
+}
+
+.driver-sim-card.warn {
+  border-color: rgba(199, 67, 67, 0.45);
+  background: #fff7f7;
+}
+
+.driver-sim-card span,
+.driver-sim-card small {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.driver-sim-card strong {
+  display: block;
+  margin: 7px 0;
+  font-size: 24px;
+}
+
+.driver-sim-log {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.driver-sim-log div {
+  display: grid;
+  gap: 4px;
+  border-radius: 8px;
+  padding: 10px;
+  background: white;
+}
+
+.driver-sim-log span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
 .fuel-panel .section-head strong {
   border-radius: 8px;
   padding: 9px 12px;
@@ -1839,6 +1941,16 @@ label input {
 
   .scan-map {
     height: 300px;
+  }
+
+  .driver-sim-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .driver-sim-grid,
+  .driver-sim-log {
+    grid-template-columns: 1fr;
   }
 
   .scan-capacity-controls {

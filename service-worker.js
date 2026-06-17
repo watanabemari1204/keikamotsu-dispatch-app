@@ -1,9 +1,9 @@
-const CACHE_NAME = "keikamotsu-dispatch-v33";
+const CACHE_NAME = "keikamotsu-dispatch-v34";
 const APP_FILES = [
   "./",
   "./index.html",
-  "./styles.css?v=scanmap-33",
-  "./app.js?v=scanmap-33",
+  "./styles.css?v=sim100-34",
+  "./app.js?v=sim100-34",
   "./manifest.webmanifest",
   "./icon.svg"
 ];
