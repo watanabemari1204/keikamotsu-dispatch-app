@@ -1287,9 +1287,41 @@ function scannedRoutePlan(items) {
   };
 }
 
-function renderVideoScanResults(items, routeText) {
+function renderRawScanLog(rawReads = []) {
+  const log = $("#rawScanLog");
+  if (!log) return;
+  if (!rawReads.length) {
+    log.hidden = true;
+    log.innerHTML = "";
+    return;
+  }
+  const sample = rawReads.slice(0, 48);
+  const waveCounts = rawReads.reduce((acc, item) => {
+    acc[item.wave] = (acc[item.wave] || 0) + 1;
+    return acc;
+  }, {});
+  log.hidden = false;
+  log.innerHTML = `
+    <div class="raw-scan-head">
+      <strong>個別読取ログ ${rawReads.length}件</strong>
+      <span>表示は先頭${sample.length}件 / 実処理は全${rawReads.length}件</span>
+    </div>
+    <div class="raw-scan-stats">
+      <span>1便 ${waveCounts[1] || 0}件</span>
+      <span>2便 ${waveCounts[2] || 0}件</span>
+      <span>3便 ${waveCounts[3] || 0}件</span>
+      <span>4便候補 ${waveCounts[4] || 0}件</span>
+    </div>
+    <div class="raw-scan-list">
+      ${sample.map((item) => `<span>${item.code} ${item.address} / ${item.wave}便 / ${item.deadline}</span>`).join("")}
+    </div>
+  `;
+}
+
+function renderVideoScanResults(items, routeText, rawReads = []) {
   $("#videoScanCount").textContent = `${items.reduce((sum, item) => sum + item.parcels, 0)}個読取`;
   $("#videoRouteSummary").textContent = routeText;
+  renderRawScanLog(rawReads);
   const plan = scannedRoutePlan(items);
   const slotPlan = $("#slotPlan");
   slotPlan.innerHTML = `
@@ -1354,12 +1386,70 @@ function generatedBulkScanGroups(total) {
   });
 }
 
+function seededNumber(seed) {
+  const value = Math.sin(seed * 999.91) * 10000;
+  return value - Math.floor(value);
+}
+
+function generatedParcelReads(total) {
+  const groupSpecs = generatedBulkScanGroups(total);
+  const mitaBlocks = ["1-4", "1-5", "1-6", "1-7", "1-8", "1-9", "1-10", "1-11", "1-12", "1-13"];
+  const shibaBlocks = ["3-2", "3-3", "3-4", "3-5", "3-6", "3-7", "3-8", "3-9", "3-10", "3-11", "3-12", "3-13", "3-14", "3-15", "3-16", "3-17", "3-18", "3-19"];
+  const buildingTypes = ["オフィス", "事務所", "受付", "営業所", "法人フロア", "会議室", "管理室", "バックヤード"];
+  const reads = [];
+  groupSpecs.forEach((group, groupIndex) => {
+    for (let index = 0; index < group.parcels; index += 1) {
+      const serial = reads.length + 1;
+      const blocks = group.area.includes("芝") ? shibaBlocks : mitaBlocks;
+      const block = blocks[Math.floor(seededNumber(serial + groupIndex * 17) * blocks.length)];
+      const buildingNo = 1 + Math.floor(seededNumber(serial * 3 + groupIndex) * 39);
+      const floor = 2 + Math.floor(seededNumber(serial * 5 + groupIndex) * 10);
+      const type = buildingTypes[Math.floor(seededNumber(serial * 7 + groupIndex) * buildingTypes.length)];
+      const suffix = group.area.includes("芝") ? "芝三丁目" : "三田一丁目";
+      reads.push({
+        code: `K-${String(serial).padStart(4, "0")}`,
+        address: `港区${suffix}${block}-${buildingNo} ${type}${floor}F`,
+        area: group.area,
+        wave: group.wave,
+        deadline: group.deadline,
+        lat: group.lat + (seededNumber(serial + 11) - 0.5) * 0.0022,
+        lng: group.lng + (seededNumber(serial + 19) - 0.5) * 0.0022
+      });
+    }
+  });
+  return reads;
+}
+
+function aggregateParcelReads(reads) {
+  const groups = new Map();
+  reads.forEach((read) => {
+    const key = `${read.wave}-${read.area}-${read.deadline}`;
+    if (!groups.has(key)) {
+      groups.set(key, {
+        address: `港区${read.area} ${read.wave}便読取束`,
+        area: read.area,
+        wave: read.wave,
+        deadline: read.deadline,
+        parcels: 0,
+        lat: read.lat,
+        lng: read.lng
+      });
+    }
+    const group = groups.get(key);
+    group.parcels += 1;
+    group.lat = (group.lat * (group.parcels - 1) + read.lat) / group.parcels;
+    group.lng = (group.lng * (group.parcels - 1) + read.lng) / group.parcels;
+  });
+  return [...groups.values()].sort((a, b) => (a.wave - b.wave) || minutesFromTime(a.deadline) - minutesFromTime(b.deadline));
+}
+
 function bulk400Scan() {
   const total = scanTargetCount();
   const speed = Number($("#scanSpeed")?.value || 2);
   const seconds = Math.ceil(total / speed);
   const clips = Math.max(1, Math.ceil(seconds / 60));
-  const groups = generatedBulkScanGroups(total);
+  const rawReads = generatedParcelReads(total);
+  const groups = aggregateParcelReads(rawReads);
   const unitPrice = getUnitPrice();
   runMode = 4;
   $("#fourRuns")?.classList.add("active");
@@ -1386,8 +1476,8 @@ function bulk400Scan() {
   ];
   optimizeStops();
   setScanProgress("400個対応の便分け・積み順へ反映", 100);
-  const routeText = `${total}個を${groups.length}束に集約。撮影目安は約${seconds}秒、${Math.ceil(seconds / clips)}秒 x ${clips}本。1〜3便の固定配送と4便当日配送候補へ振り分けました。`;
-  renderVideoScanResults(groups, routeText);
+  const routeText = `${rawReads.length}個の仮住所を個別読取し、${groups.length}束に集約。撮影目安は約${seconds}秒、${Math.ceil(seconds / clips)}秒 x ${clips}本。三田一丁目・芝三丁目周辺を1〜3便固定配送と4便当日配送候補へ振り分けました。`;
+  renderVideoScanResults(groups, routeText, rawReads);
   $("#videoScanCount").textContent = `${total}個読取`;
   $("#scanStatus").textContent = "連続読取完了。束単位で便分け・積み順・ルートに反映しました";
 }

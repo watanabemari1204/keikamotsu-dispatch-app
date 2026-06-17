@@ -16,7 +16,7 @@
       integrity="sha256-p4NxAoJBhIINfQvQbM+TgGyEoYOY0O5pYf67R7sQ4hA="
       crossorigin=""
     />
-    <link rel="stylesheet" href="./styles.css?v=scan400-31" />
+    <link rel="stylesheet" href="./styles.css?v=scan400demo-32" />
   </head>
   <body>
     <div class="app-shell">
@@ -411,6 +411,7 @@
                 現在はブラウザ内プロトタイプのため、実OCR API未接続時はサンプル荷札で一括読取の流れを再現します。本番では荷札OCR/APIに接続します。
               </div>
               <div class="slot-plan" id="slotPlan"></div>
+              <div class="raw-scan-log" id="rawScanLog" hidden></div>
               <div class="scan-result-grid" id="scanResultGrid"></div>
               <button class="primary-button full" id="viewScannedRoute" type="button">反映したルートを表示</button>
             </section>
@@ -538,7 +539,7 @@
       integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
       crossorigin=""
     ></script>
-    <script src="./app.js?v=scan400-31"></script>
+    <script src="./app.js?v=scan400demo-32"></script>
     <script>
       if ("serviceWorker" in navigator && location.protocol !== "file:") {
         window.addEventListener("load", () => {

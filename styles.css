@@ -1073,6 +1073,60 @@ button {
   line-height: 1.5;
 }
 
+.raw-scan-log {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+  border: 1px solid rgba(37, 99, 235, 0.22);
+  border-radius: 8px;
+  padding: 12px;
+  background: #f5f8ff;
+}
+
+.raw-scan-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.raw-scan-head strong {
+  color: var(--route);
+}
+
+.raw-scan-head span,
+.raw-scan-stats span,
+.raw-scan-list span {
+  color: #34414d;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.raw-scan-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.raw-scan-stats span {
+  border-radius: 999px;
+  padding: 5px 8px;
+  background: white;
+}
+
+.raw-scan-list {
+  display: grid;
+  max-height: 210px;
+  overflow: auto;
+  gap: 6px;
+}
+
+.raw-scan-list span {
+  border-radius: 8px;
+  padding: 7px 8px;
+  background: white;
+}
+
 .scan-result-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1733,6 +1787,11 @@ label input {
 
   .cockpit-actions {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .raw-scan-head {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .scan-capacity-controls {
