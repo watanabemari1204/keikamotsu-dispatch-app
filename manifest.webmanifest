@@ -1,0 +1,19 @@
+{
+  "name": "港区ミニ配送オペレーター",
+  "short_name": "港区配送",
+  "description": "勝島集積所、三田一丁目、芝三丁目を中心に、荷物読取、便分け、ルート提案を行う軽貨物配送アプリ。",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f7f8fa",
+  "theme_color": "#111820",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

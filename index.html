@@ -1,0 +1,523 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#111820" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="港区配送" />
+    <title>港区ミニ配送オペレーター</title>
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="icon" href="./icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="./icon.svg" />
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIINfQvQbM+TgGyEoYOY0O5pYf67R7sQ4hA="
+      crossorigin=""
+    />
+    <link rel="stylesheet" href="./styles.css?v=cockpit29" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="配送管理">
+        <div class="brand">
+          <div class="brand-mark">K</div>
+          <div>
+            <h1>港区ミニ配送オペレーター</h1>
+            <p>明日来る系オフィス配送中心</p>
+          </div>
+        </div>
+
+        <nav class="nav" aria-label="表示切替">
+          <button class="nav-item active" data-panel="dashboard" type="button">今日の運行</button>
+          <button class="nav-item" data-panel="scanner" type="button">音声・カメラ読取</button>
+          <button class="nav-item" data-panel="settings" type="button">車両と条件</button>
+        </nav>
+
+        <section class="driver-card">
+          <span class="section-kicker">稼働状況</span>
+          <strong id="driverStatus">196個 / 3便 / 2便後14:00勝島判定</strong>
+          <p id="earningForecast">1個180円 / オフィス配送メイン</p>
+        </section>
+      </aside>
+
+      <main class="main">
+        <section class="topbar">
+          <div>
+            <span class="section-kicker">2026年6月17日 水曜日</span>
+            <h2>200弱の荷物を3便に分け、2便後の14時勝島戻りを管理</h2>
+          </div>
+          <div class="quick-actions">
+            <select id="weatherMode" aria-label="今日の天気">
+              <option value="clear">晴れ</option>
+              <option value="cloudy" selected>くもり</option>
+              <option value="rain">雨</option>
+              <option value="storm">強い雨</option>
+            </select>
+            <button class="secondary-button" id="autoWeather" type="button">天気自動</button>
+            <button class="icon-button" id="optimizeRoute" type="button" aria-label="配送順を最適化" title="配送順を最適化">
+              <span aria-hidden="true">↻</span>
+            </button>
+            <button class="secondary-button" id="topVoice" type="button">音声入力</button>
+            <button class="primary-button" id="openMaps" type="button">マップ連動</button>
+          </div>
+        </section>
+
+        <section class="panel active" id="dashboard">
+          <section class="cockpit-panel" aria-label="運転席ビュー">
+            <div class="cockpit-main">
+              <span class="section-kicker">Drive View</span>
+              <h3 id="cockpitAction">次の行動を計算中</h3>
+              <p id="cockpitRoute">ルートと締切を確認しています</p>
+            </div>
+            <div class="cockpit-status">
+              <div>
+                <span>4便積込</span>
+                <strong id="cockpitDeadline">--:--</strong>
+                <small id="cockpitDeadlineHint">判定中</small>
+              </div>
+              <div>
+                <span>次の時刻</span>
+                <strong id="cockpitNextTime">--:--</strong>
+                <small id="cockpitNextHint">出発/戻り</small>
+              </div>
+            </div>
+            <div class="cockpit-actions">
+              <button class="primary-button" id="cockpitNavigate" type="button">ナビ開始</button>
+              <button class="secondary-button" id="cockpitVoice" type="button">音声案内</button>
+            </div>
+          </section>
+
+          <section class="autopilot-panel" aria-label="朝の自動運行">
+            <div>
+              <span class="section-kicker">Morning Autopilot</span>
+              <h3>朝に1回だけ押して、1日のナビを準備</h3>
+              <p id="autopilotStatus">天気・混雑・積み順・駐車判断・ナビ候補をまとめて準備します。</p>
+            </div>
+            <div class="autopilot-actions">
+              <button class="primary-button" id="startAutopilot" type="button">朝の自動運行を開始</button>
+              <button class="secondary-button" id="nextNavigation" type="button">次のルートでナビ</button>
+              <button class="secondary-button" id="guidanceTest" type="button">音声・バイブ確認</button>
+              <button class="secondary-button" id="startReminders" type="button">音声リマインド開始</button>
+            </div>
+          </section>
+
+          <section class="roundtrip-planner" aria-label="往復計画">
+            <div class="section-head">
+              <div>
+                <span class="section-kicker">Round Trip</span>
+                <h3>勝島↔三田・芝 周辺の往復計画</h3>
+              </div>
+              <div class="roundtrip-toggle" role="group" aria-label="往復回数">
+                <button id="threeRuns" type="button">3往復</button>
+                <button class="active" id="fourRuns" type="button">4往復で稼ぐ</button>
+              </div>
+            </div>
+            <div class="roundtrip-summary" id="roundtripSummary"></div>
+            <div class="run-grid" id="runGrid"></div>
+          </section>
+
+          <section class="morning-plan" aria-label="朝決定済み配送の3便設計">
+            <div class="section-head">
+              <div>
+                <span class="section-kicker">Fixed Morning Plan</span>
+                <h3>朝に決まっている配送を3便で分ける指示</h3>
+              </div>
+              <strong id="morningPlanBadge">計算中</strong>
+            </div>
+            <p class="morning-plan-note">
+              3便目までは朝に決まっているオフィス配送として、エリア・混雑予測・ナビ順・積み位置を先に固定します。4便目だけ当日配送の追加判断です。
+            </p>
+            <div class="morning-plan-grid" id="morningPlanGrid"></div>
+          </section>
+
+          <section class="simulation-panel" aria-label="朝作業時間シミュレーション">
+            <div class="section-head">
+              <div>
+                <span class="section-kicker">Simulation</span>
+                <h3>5:30出社から1便出発までの朝作業比較</h3>
+              </div>
+              <strong id="simulationBadge">計算中</strong>
+            </div>
+            <p class="simulation-note">
+              150分は毎回の積み込みではなく、朝一の3便分仕分け・便分け・積み順作成・1便目の車積みまでの現状時間です。配達時間は軽貨物のオフィス配送として、個数だけでなく納品先数・台車移動・受付・走行・渋滞補正で計算します。
+            </p>
+            <div class="simulation-controls">
+              <label>
+                出社時刻
+                <input id="workStartTime" type="time" value="05:30" />
+              </label>
+              <label>
+                現状の朝作業
+                <input id="oldLoadMinutes" type="number" min="30" max="240" step="5" value="150" />
+              </label>
+              <label>
+                アプリ後の朝作業目標
+                <input id="aiLoadMinutes" type="number" min="60" max="150" step="5" value="90" />
+              </label>
+              <label>
+                2・3便の車積みだけ
+                <input id="bufferMinutes" type="number" min="8" max="60" step="1" value="15" />
+              </label>
+            </div>
+            <div class="simulation-grid" id="simulationGrid"></div>
+          </section>
+
+          <div class="metrics-grid">
+            <article class="metric">
+              <span>全便完了予定</span>
+              <strong id="finishTime">17:42</strong>
+              <small>最終便の車積み込み込み</small>
+            </article>
+            <article class="metric">
+              <span>混雑リスク</span>
+              <strong id="trafficRisk">中</strong>
+              <small id="trafficHint">16時台に環八周辺で上昇</small>
+            </article>
+            <article class="metric">
+              <span>2便後14時判定</span>
+              <strong id="returnStatus">OK</strong>
+              <small id="returnHint">13:42 センター戻り見込み</small>
+            </article>
+            <article class="metric">
+              <span>荷物数</span>
+              <strong id="parcelTotal">196個</strong>
+              <small id="loadRate">1個180円で計算</small>
+            </article>
+            <article class="metric">
+              <span>達成率</span>
+              <strong id="achievementRate">0%</strong>
+              <small id="achievementHint">配送進捗</small>
+            </article>
+            <article class="metric">
+              <span>燃料計画</span>
+              <strong id="fuelStatus">確認中</strong>
+              <small id="fuelHint">2日に1回補給</small>
+            </article>
+          </div>
+
+          <section class="rest-panel" aria-label="休憩と食事の最適提案">
+            <div class="section-head">
+              <div>
+                <span class="section-kicker">Recovery</span>
+                <h3>目を閉じる休憩・食事タイミング</h3>
+              </div>
+              <strong id="restBadge">計算中</strong>
+            </div>
+            <div class="rest-best" id="restBest"></div>
+            <div class="rest-grid" id="restGrid"></div>
+          </section>
+
+          <section class="load-plan" aria-label="積み込み計画">
+            <div class="section-head">
+              <div>
+                <span class="section-kicker">Load Plan</span>
+                <h3>朝の積み分けと2便後の勝島戻り</h3>
+              </div>
+              <strong id="centerReturnBadge">勝島 13:42 戻り</strong>
+            </div>
+            <div class="wave-grid" id="waveGrid"></div>
+          </section>
+
+          <section class="route-advisor" aria-label="配送ルート提案">
+            <div class="section-head">
+              <div>
+                <span class="section-kicker">Route Advisor</span>
+                <h3>時間帯・曜日・五十日・天気・渋滞を加味した提案</h3>
+              </div>
+              <strong id="todayCondition">今日の条件</strong>
+            </div>
+            <div class="advisor-grid">
+              <article class="advisor-main">
+                <span>推奨ルート</span>
+                <strong id="routeRecommendation">計算中</strong>
+                <p id="routeSummary">時間帯と混雑を見て配送順を提案します。</p>
+              </article>
+              <div class="evidence-list" id="evidenceList"></div>
+            </div>
+          </section>
+
+          <div class="work-grid">
+            <section class="map-panel" aria-label="配送マップ">
+              <div class="map-toolbar">
+                <div>
+                  <span class="section-kicker">Route Map</span>
+                  <h3>勝島・三田一丁目・芝三丁目の配送順</h3>
+                  <p id="activeRouteLabel" class="active-route-label">地図とナビの対象を計算中</p>
+                </div>
+                <select id="timeSlot" aria-label="時間帯">
+                  <option value="8">8時</option>
+                  <option value="10" selected>10時</option>
+                  <option value="12">12時</option>
+                  <option value="15">15時</option>
+                  <option value="17">17時</option>
+                  <option value="19">19時</option>
+                </select>
+                <select id="mapStyle" aria-label="地図表示">
+                  <option value="standard" selected>標準地図</option>
+                  <option value="satellite">衛星地図</option>
+                </select>
+                <label class="map-toggle">
+                  <input id="vicsLayer" type="checkbox" checked />
+                  VICS
+                </label>
+                <button class="primary-button" id="routeNavigate" type="button">このルートでナビ</button>
+              </div>
+              <div class="map-canvas" id="mapCanvas" aria-label="配送ルート地図"></div>
+              <div class="route-sequence" id="routeSequence"></div>
+              <section class="parking-panel" aria-label="駐車最適化">
+                <div class="parking-toggle-row">
+                  <div>
+                    <span class="section-kicker">Parking</span>
+                    <h3>路駐候補・有料駐車場の最適判断</h3>
+                  </div>
+                  <button class="secondary-button" id="toggleParking" type="button" aria-expanded="false">駐車判断を表示</button>
+                </div>
+                <div class="parking-body" id="parkingBody" hidden>
+                  <div class="parking-best" id="parkingBest"></div>
+                  <div class="parking-controls">
+                    <label>
+                      駐車モード
+                      <select id="parkingMode">
+                        <option value="auto" selected>自動で最適</option>
+                        <option value="street">路駐候補優先</option>
+                        <option value="paid">有料駐車場優先</option>
+                      </select>
+                    </label>
+                    <label>
+                      現在のエリア
+                      <select id="parkingArea">
+                        <option value="auto" selected>配送ルートから自動</option>
+                        <option value="mita">三田一丁目</option>
+                        <option value="shiba">芝三丁目</option>
+                      </select>
+                    </label>
+                  </div>
+                  <div class="parking-grid" id="parkingGrid"></div>
+                  <p class="parking-note">路駐候補は実際の標識・駐車禁止区間・交通状況を必ず現地確認。満空と料金はアプリ内予測です。</p>
+                </div>
+              </section>
+              <div class="vics-panel" id="vicsPanel"></div>
+              <div class="traffic-strip" id="trafficStrip"></div>
+            </section>
+
+            <section class="route-panel">
+              <div class="section-head">
+                <div>
+                  <span class="section-kicker">Stops</span>
+                  <h3>便別配送リスト</h3>
+                </div>
+              </div>
+              <ol class="stop-list" id="stopList"></ol>
+            </section>
+          </div>
+        </section>
+
+        <section class="panel" id="scanner">
+          <div class="scanner-grid">
+            <section class="scan-card camera-card">
+              <div class="section-head">
+                <div>
+                  <span class="section-kicker">Camera</span>
+                  <h3>荷札・伝票の読取</h3>
+                </div>
+                <button class="primary-button" id="startCamera" type="button">カメラ起動</button>
+              </div>
+              <div class="camera-frame">
+                <video id="cameraPreview" playsinline muted></video>
+                <div class="scan-reticle" aria-hidden="true"></div>
+                <div class="scan-status" id="scanStatus">荷札を枠内に合わせてください</div>
+              </div>
+              <div class="scan-actions">
+                <button class="secondary-button" id="captureParcel" type="button">読み取り</button>
+                <button class="secondary-button" id="bulkVideoScan" type="button">映像で一括読取</button>
+                <button class="ghost-button" id="demoScan" type="button">デモ読取</button>
+              </div>
+            </section>
+
+            <section class="scan-card">
+              <div class="section-head">
+                <div>
+                  <span class="section-kicker">Voice</span>
+                  <h3>音声で配送追加</h3>
+                </div>
+                <button class="primary-button" id="startVoice" type="button">音声入力</button>
+              </div>
+              <textarea id="voiceText" rows="5" placeholder="例: 港区三田一丁目へ16時まで、冷蔵、小箱2個、単価4200円"></textarea>
+              <button class="secondary-button full" id="parseVoice" type="button">内容を配送リストへ反映</button>
+              <div class="voice-hints">
+                <span>住所</span>
+                <span>締切</span>
+                <span>荷姿</span>
+                <span>単価</span>
+              </div>
+            </section>
+
+            <section class="scan-card parcel-card">
+              <div>
+                <span class="section-kicker">3D Parcel</span>
+                <h3>立体読取ビュー</h3>
+              </div>
+              <div class="parcel-stage">
+                <div class="parcel-box" id="parcelBox">
+                  <span class="face front">荷物</span>
+                  <span class="face side"></span>
+                  <span class="face top"></span>
+                </div>
+              </div>
+              <div class="parcel-data" id="parcelData">
+                <span>サイズ: 42 x 31 x 18cm</span>
+                <span>重量: 6.2kg</span>
+                <span>扱い: 通常</span>
+              </div>
+            </section>
+
+            <section class="scan-card video-route-card">
+              <div class="section-head">
+                <div>
+                  <span class="section-kicker">Video OCR Route</span>
+                  <h3>映像読取からルート提示</h3>
+                </div>
+                <strong id="videoScanCount">未読取</strong>
+              </div>
+              <div class="video-route-summary" id="videoRouteSummary">
+                カメラで荷札を流すと、住所・個数・締切を読み取り、三田一丁目/芝三丁目/勝島帰庫の条件でルート案を作ります。
+              </div>
+              <div class="slot-plan" id="slotPlan"></div>
+              <div class="scan-result-grid" id="scanResultGrid"></div>
+            </section>
+          </div>
+        </section>
+
+        <section class="panel" id="settings">
+          <div class="settings-grid">
+            <label>
+              車両タイプ
+              <select id="vehicleType">
+                <option value="van" selected>軽バン 350kg</option>
+                <option value="truck">軽トラック 350kg</option>
+                <option value="bike">バイク便 30kg</option>
+              </select>
+            </label>
+            <label>
+              優先条件
+              <select id="routePriority">
+                <option value="time" selected>締切優先</option>
+                <option value="distance">距離優先</option>
+                <option value="earning">単価優先</option>
+              </select>
+            </label>
+            <label>
+              稼働終了時刻
+              <input id="endTime" type="time" value="18:00" />
+            </label>
+            <label>
+              休憩時間
+              <input id="breakMinutes" type="number" min="0" max="120" step="5" value="45" />
+            </label>
+            <label>
+              目を閉じる休憩
+              <select id="napPreference">
+                <option value="balanced" selected>10分を1回</option>
+                <option value="short">5分を2回</option>
+                <option value="none">取らない</option>
+              </select>
+            </label>
+            <label>
+              食事の取り方
+              <select id="mealPreference">
+                <option value="normal" selected>15分で食事</option>
+                <option value="light">10分で軽食</option>
+                <option value="after">14時戻り後に食事</option>
+              </select>
+            </label>
+            <label>
+              音声案内
+              <select id="voiceGuide">
+                <option value="on" selected>使う</option>
+                <option value="off">使わない</option>
+              </select>
+            </label>
+            <label>
+              バイブ通知
+              <select id="vibeGuide">
+                <option value="on" selected>使う</option>
+                <option value="off">使わない</option>
+              </select>
+            </label>
+            <label>
+              14時までに戻る集積所
+              <input id="centerName" type="text" value="勝島集積所" />
+            </label>
+            <label>
+              荷物単価
+              <input id="parcelUnitPrice" type="number" min="0" step="10" value="180" />
+            </label>
+            <label>
+              有料高速道路
+              <select id="tollPolicy" disabled>
+                <option value="avoid" selected>使わない固定</option>
+              </select>
+            </label>
+            <label>
+              燃料補給間隔
+              <select id="fuelInterval">
+                <option value="2" selected>2日に1回</option>
+                <option value="1">毎日</option>
+                <option value="3">3日に1回</option>
+              </select>
+            </label>
+          </div>
+          <section class="fuel-panel" aria-label="燃料補給計画">
+            <div class="section-head">
+              <div>
+                <span class="section-kicker">Fuel</span>
+                <h3>本日の最安スタンド候補</h3>
+              </div>
+              <strong id="cheapestFuelBadge">計算中</strong>
+            </div>
+            <div class="fuel-grid" id="fuelGrid"></div>
+          </section>
+          <section class="settings-note">
+            <h3>外部連携の想定</h3>
+            <p>本番化では Google Maps Platform、配送案件API、OCR、音声認識、渋滞予測データを接続できます。このプロトタイプはブラウザ単体で動く業務画面です。</p>
+          </section>
+        </section>
+      </main>
+
+      <nav class="mobile-dock" aria-label="スマホ操作">
+        <button type="button" data-mobile-panel="dashboard">今日</button>
+        <button type="button" data-mobile-panel="scanner">読取</button>
+        <button type="button" id="mobileVoice">音声</button>
+        <button type="button" id="mobileMaps">ナビ</button>
+      </nav>
+    </div>
+
+    <template id="stopTemplate">
+      <li class="stop-item">
+        <div class="stop-number"></div>
+        <div class="stop-body">
+          <div class="stop-title"></div>
+          <div class="stop-meta"></div>
+          <div class="stop-tags"></div>
+        </div>
+        <div class="stop-money"></div>
+      </li>
+    </template>
+
+    <script
+      src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+      integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+      crossorigin=""
+    ></script>
+    <script src="./app.js?v=cockpit29"></script>
+    <script>
+      if ("serviceWorker" in navigator && location.protocol !== "file:") {
+        window.addEventListener("load", () => {
+          navigator.serviceWorker.register("./service-worker.js");
+        });
+      }
+    </script>
+  </body>
+</html>
