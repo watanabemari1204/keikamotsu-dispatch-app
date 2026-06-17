@@ -64,6 +64,9 @@ let sameDayCount = 0;
 let liveMap;
 let liveMapLayer;
 let liveBaseLayer;
+let scanMap;
+let scanMapLayer;
+let scanBaseLayer;
 let activeMapRoute = [];
 let autopilotEnabled = false;
 let reminderTimer;
@@ -1322,6 +1325,7 @@ function renderVideoScanResults(items, routeText, rawReads = []) {
   $("#videoScanCount").textContent = `${items.reduce((sum, item) => sum + item.parcels, 0)}個読取`;
   $("#videoRouteSummary").textContent = routeText;
   renderRawScanLog(rawReads);
+  renderScanDetailMap(items, rawReads);
   const plan = scannedRoutePlan(items);
   const slotPlan = $("#slotPlan");
   slotPlan.innerHTML = `
@@ -1341,6 +1345,85 @@ function renderVideoScanResults(items, routeText, rawReads = []) {
     `;
     grid.appendChild(card);
   });
+}
+
+function renderScanDetailMap(groups = [], rawReads = []) {
+  const canvas = $("#scanMap");
+  if (!canvas) return;
+  const routeStops = [
+    { name: depot.name, area: "勝島", lat: depot.lat, lng: depot.lng, isDepot: true },
+    ...groups,
+    { name: depot.name, area: "勝島", lat: depot.lat, lng: depot.lng, isDepot: true }
+  ];
+  const visibleReads = rawReads.slice(0, 80);
+  $("#scanMapStatus").textContent = rawReads.length
+    ? `個別地点 ${rawReads.length}件 / 地図表示 ${visibleReads.length}点 / 集約 ${groups.length}束`
+    : `集約 ${groups.length}束を表示`;
+
+  if (!window.L) {
+    canvas.innerHTML = "<div class=\"map-fallback\">地図ライブラリ読込後に配送地点を表示します</div>";
+    return;
+  }
+
+  const selectedTile = mapTiles[$("#mapStyle")?.value || "standard"];
+  if (!scanMap) {
+    scanMap = L.map("scanMap", {
+      zoomControl: true,
+      attributionControl: false
+    });
+    scanBaseLayer = L.tileLayer(selectedTile.url, {
+      maxZoom: 19,
+      attribution: selectedTile.attribution
+    }).addTo(scanMap);
+    scanMapLayer = L.layerGroup().addTo(scanMap);
+  } else if (scanBaseLayer?.options?.attribution !== selectedTile.attribution) {
+    scanMap.removeLayer(scanBaseLayer);
+    scanBaseLayer = L.tileLayer(selectedTile.url, {
+      maxZoom: 19,
+      attribution: selectedTile.attribution
+    }).addTo(scanMap);
+  }
+
+  scanMapLayer.clearLayers();
+
+  visibleReads.forEach((read) => {
+    L.circleMarker([read.lat, read.lng], {
+      radius: 3,
+      color: read.wave === 1 ? "#2563eb" : read.wave === 2 ? "#0f8b8d" : read.wave === 3 ? "#c17900" : "#c74343",
+      weight: 1,
+      fillOpacity: 0.58
+    }).bindPopup(`${read.code}<br>${read.address}<br>${read.wave}便 / ${read.deadline}`).addTo(scanMapLayer);
+  });
+
+  L.polyline(routeStops.map((stop) => [stop.lat, stop.lng]), {
+    color: "#172532",
+    weight: 4,
+    opacity: 0.72
+  }).addTo(scanMapLayer);
+
+  routeStops.forEach((stop, index) => {
+    L.circleMarker([stop.lat, stop.lng], {
+      radius: stop.isDepot ? 9 : 8,
+      color: "#ffffff",
+      weight: 3,
+      fillColor: stop.isDepot ? "#172532" : "#0f8b8d",
+      fillOpacity: 1
+    }).bindPopup(stop.isDepot ? "勝島集積所" : `${stop.address}<br>${stop.parcels}個 / ${stop.wave}便 / ${stop.deadline}`).addTo(scanMapLayer);
+    L.marker([stop.lat, stop.lng], {
+      icon: L.divIcon({
+        className: "route-number-label",
+        html: `<span>${index + 1}</span>`,
+        iconSize: [28, 28],
+        iconAnchor: [14, 14]
+      }),
+      interactive: false
+    }).addTo(scanMapLayer);
+  });
+
+  const boundsPoints = [...routeStops, ...visibleReads].map((point) => [point.lat, point.lng]);
+  scanMap.invalidateSize();
+  scanMap.fitBounds(L.latLngBounds(boundsPoints), { padding: [24, 24], maxZoom: 15 });
+  setTimeout(() => scanMap.invalidateSize(), 120);
 }
 
 function setScanProgress(label, percent) {

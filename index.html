@@ -16,7 +16,7 @@
       integrity="sha256-p4NxAoJBhIINfQvQbM+TgGyEoYOY0O5pYf67R7sQ4hA="
       crossorigin=""
     />
-    <link rel="stylesheet" href="./styles.css?v=scan400demo-32" />
+    <link rel="stylesheet" href="./styles.css?v=scanmap-33" />
   </head>
   <body>
     <div class="app-shell">
@@ -410,6 +410,15 @@
               <div class="ocr-note">
                 現在はブラウザ内プロトタイプのため、実OCR API未接続時はサンプル荷札で一括読取の流れを再現します。本番では荷札OCR/APIに接続します。
               </div>
+              <div class="scan-map-panel">
+                <div class="scan-map-head">
+                  <strong>読取地点マップ</strong>
+                  <span id="scanMapStatus">400個モード実行後に地点を表示</span>
+                </div>
+                <div class="scan-map" id="scanMap" aria-label="読み取り配送地点マップ">
+                  <div class="map-fallback">読み取り後、三田一丁目・芝三丁目の配送地点をここに表示します</div>
+                </div>
+              </div>
               <div class="slot-plan" id="slotPlan"></div>
               <div class="raw-scan-log" id="rawScanLog" hidden></div>
               <div class="scan-result-grid" id="scanResultGrid"></div>
@@ -539,7 +548,7 @@
       integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
       crossorigin=""
     ></script>
-    <script src="./app.js?v=scan400demo-32"></script>
+    <script src="./app.js?v=scanmap-33"></script>
     <script>
       if ("serviceWorker" in navigator && location.protocol !== "file:") {
         window.addEventListener("load", () => {

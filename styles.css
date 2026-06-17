@@ -1035,6 +1035,44 @@ button {
   line-height: 1.6;
 }
 
+.scan-map-panel {
+  margin-top: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  background: white;
+}
+
+.scan-map-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.scan-map-head strong {
+  color: var(--ink);
+}
+
+.scan-map-head span {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.scan-map {
+  position: relative;
+  height: 340px;
+  overflow: hidden;
+  border: 1px solid #cad5df;
+  border-radius: 8px;
+  background:
+    linear-gradient(90deg, rgba(20, 32, 44, 0.07) 1px, transparent 1px) 0 0 / 34px 34px,
+    linear-gradient(rgba(20, 32, 44, 0.07) 1px, transparent 1px) 0 0 / 34px 34px,
+    #eef4f7;
+}
+
 .ocr-note {
   margin-top: 10px;
   border-left: 4px solid var(--warning);
@@ -1792,6 +1830,15 @@ label input {
   .raw-scan-head {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .scan-map-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .scan-map {
+    height: 300px;
   }
 
   .scan-capacity-controls {
