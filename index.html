@@ -16,7 +16,7 @@
       integrity="sha256-p4NxAoJBhIINfQvQbM+TgGyEoYOY0O5pYf67R7sQ4hA="
       crossorigin=""
     />
-    <link rel="stylesheet" href="./styles.css?v=wavefilter42" />
+    <link rel="stylesheet" href="./styles.css?v=doublescan43" />
   </head>
   <body>
     <div class="app-shell">
@@ -384,6 +384,7 @@
                   </label>
                 </div>
                 <button class="secondary-button full" id="bulk400Scan" type="button">400個連続読取モード</button>
+                <button class="primary-button full" id="doubleScanSim" type="button">2回読取で精度シミュレーション</button>
               </div>
             </section>
 
@@ -462,6 +463,7 @@
                 </div>
               </div>
               <div class="slot-plan" id="slotPlan"></div>
+              <div class="double-scan-panel" id="doubleScanPanel" hidden></div>
               <div class="raw-scan-log" id="rawScanLog" hidden></div>
               <div class="scan-result-grid" id="scanResultGrid"></div>
               <button class="primary-button full" id="viewScannedRoute" type="button">反映したルートを表示</button>
@@ -590,7 +592,7 @@
       integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
       crossorigin=""
     ></script>
-    <script src="./app.js?v=wavefilter42"></script>
+    <script src="./app.js?v=doublescan43"></script>
     <script>
       if ("serviceWorker" in navigator && location.protocol !== "file:") {
         window.addEventListener("load", () => {
