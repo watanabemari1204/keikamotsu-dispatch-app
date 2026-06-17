@@ -1035,6 +1035,18 @@ button {
   line-height: 1.6;
 }
 
+.ocr-note {
+  margin-top: 10px;
+  border-left: 4px solid var(--warning);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: #fff8ea;
+  color: #59410b;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.5;
+}
+
 .slot-plan {
   display: grid;
   gap: 6px;
@@ -1120,6 +1132,33 @@ video {
   background: rgba(17, 24, 32, 0.82);
   color: white;
   font-size: 13px;
+}
+
+.scan-progress {
+  display: grid;
+  gap: 7px;
+  margin-top: 10px;
+}
+
+.scan-progress span {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.scan-progress div {
+  height: 9px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e5ebf0;
+}
+
+.scan-progress i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width 0.25s ease;
 }
 
 textarea {

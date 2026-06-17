@@ -1307,9 +1307,19 @@ function renderVideoScanResults(items, routeText) {
   });
 }
 
+function setScanProgress(label, percent) {
+  const progress = $("#scanProgress");
+  if (!progress) return;
+  progress.querySelector("span").textContent = label;
+  progress.querySelector("i").style.width = `${percent}%`;
+}
+
 function bulkVideoScan() {
+  setScanProgress("映像から荷札を読み取り中", 28);
+  $("#scanStatus").textContent = "映像内の住所・個数・締切を解析中";
   const unitPrice = getUnitPrice();
   const plan = scannedRoutePlan(demoVideoScanParcels);
+  setScanProgress("住所と個数を抽出", 62);
   const scannedStops = plan.sorted.map((item, index) => ({
     id: Date.now() + index,
     wave: 3,
@@ -1331,14 +1341,14 @@ function bulkVideoScan() {
   ];
   $("#timeSlot").value = runMode === 4 ? "17" : "15";
   optimizeStops();
+  setScanProgress("配送順とナビ候補へ反映", 88);
 
   const advice = routeAdvice();
-  const routeText = `映像から${scannedStops.length}か所・${plan.totalParcels}個を読取。${plan.slot}に割当し、${advice.recommendation}でナビ候補を更新しました。`;
+  const routeText = `映像から${scannedStops.length}か所・${plan.totalParcels}個を読取。4便当日配送または最終便の近場枠へ割当し、${advice.recommendation}でナビ候補を更新しました。`;
   renderVideoScanResults(demoVideoScanParcels, routeText);
-  $("#scanStatus").textContent = "映像一括読取完了。配送リストとルート提案へ反映しました";
-  document.querySelector('[data-panel="dashboard"]')?.click();
+  $("#scanStatus").textContent = "映像一括読取完了。下の住所リストとルート反映を確認できます";
+  setScanProgress("読取完了・ルート反映済み", 100);
   setTimeout(renderAll, 220);
-  setTimeout(forceVisibleMapSync, 760);
 }
 
 function captureParcel() {
@@ -1563,6 +1573,10 @@ $("#bufferMinutes").addEventListener("input", renderAll);
 $("#startCamera").addEventListener("click", startCamera);
 $("#captureParcel").addEventListener("click", captureParcel);
 $("#bulkVideoScan").addEventListener("click", bulkVideoScan);
+$("#viewScannedRoute").addEventListener("click", () => {
+  document.querySelector('[data-panel="dashboard"]')?.click();
+  setTimeout(forceVisibleMapSync, 400);
+});
 $("#demoScan").addEventListener("click", demoScan);
 $("#startVoice").addEventListener("click", startVoice);
 $("#parseVoice").addEventListener("click", parseVoiceText);
