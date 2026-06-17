@@ -1264,9 +1264,13 @@ function demoScan() {
 
 function scannedRoutePlan(items) {
   const sorted = [...items].sort((a, b) => {
+    const waveOrder = (a.wave || 99) - (b.wave || 99);
+    if (waveOrder !== 0) return waveOrder;
+    const deadlineOrder = minutesFromTime(a.deadline) - minutesFromTime(b.deadline);
+    if (deadlineOrder !== 0) return deadlineOrder;
     const areaOrder = a.area.localeCompare(b.area, "ja");
     if (areaOrder !== 0) return areaOrder;
-    return minutesFromTime(a.deadline) - minutesFromTime(b.deadline);
+    return (a.address || "").localeCompare(b.address || "", "ja");
   });
   const totalParcels = sorted.reduce((sum, item) => sum + item.parcels, 0);
   const workMinutes = Math.round(totalParcels * 1.35 + sorted.length * 6 + 18);
@@ -1312,6 +1316,80 @@ function setScanProgress(label, percent) {
   if (!progress) return;
   progress.querySelector("span").textContent = label;
   progress.querySelector("i").style.width = `${percent}%`;
+}
+
+function scanTargetCount() {
+  const input = $("#scanTargetCount");
+  const value = Math.min(400, Math.max(1, Number(input?.value || 400)));
+  if (input && Number(input.value) !== value) input.value = value;
+  return value;
+}
+
+function renderScanCapacity() {
+  const count = scanTargetCount();
+  const speed = Number($("#scanSpeed")?.value || 2);
+  const seconds = Math.ceil(count / speed);
+  const clips = Math.max(1, Math.ceil(seconds / 60));
+  const clipSeconds = Math.ceil(seconds / clips);
+  $("#scanCapacityTitle").textContent = `最大400個まで連続読取 / 今回 ${count}個`;
+  $("#scanTimeGuide").textContent = `撮影目安: 約${seconds}秒。おすすめは${clipSeconds}秒 x ${clips}本。荷札は0.5秒ほど止めて映すと安定します。`;
+}
+
+function generatedBulkScanGroups(total) {
+  const groups = [
+    { address: "港区三田一丁目 1便午前指定束", area: "三田一丁目", ratio: 0.18, deadline: "09:40", lat: 35.65325, lng: 139.74295, wave: 1 },
+    { address: "港区三田一丁目 1便法人受付束", area: "三田一丁目", ratio: 0.17, deadline: "10:20", lat: 35.65255, lng: 139.74443, wave: 1 },
+    { address: "港区芝三丁目 2便事務所ビル束", area: "芝三丁目", ratio: 0.16, deadline: "11:00", lat: 35.65307, lng: 139.7453, wave: 2 },
+    { address: "港区芝三丁目 2便昼前法人束", area: "芝三丁目", ratio: 0.16, deadline: "11:45", lat: 35.65184, lng: 139.74531, wave: 2 },
+    { address: "港区三田一丁目 3便午後受付束", area: "三田一丁目", ratio: 0.14, deadline: "13:10", lat: 35.65377, lng: 139.74157, wave: 3 },
+    { address: "港区芝三丁目 3便会社受付束", area: "芝三丁目", ratio: 0.12, deadline: "13:35", lat: 35.65126, lng: 139.74886, wave: 3 },
+    { address: "港区三田一丁目 4便当日配送候補", area: "三田一丁目", ratio: 0.04, deadline: "16:00", lat: 35.65413, lng: 139.73945, wave: 4 },
+    { address: "港区芝三丁目 4便当日配送候補", area: "芝三丁目", ratio: 0.03, deadline: "17:20", lat: 35.65238, lng: 139.74668, wave: 4 }
+  ];
+  let used = 0;
+  return groups.map((group, index) => {
+    const parcels = index === groups.length - 1 ? Math.max(1, total - used) : Math.max(1, Math.round(total * group.ratio));
+    used += parcels;
+    return { ...group, parcels };
+  });
+}
+
+function bulk400Scan() {
+  const total = scanTargetCount();
+  const speed = Number($("#scanSpeed")?.value || 2);
+  const seconds = Math.ceil(total / speed);
+  const clips = Math.max(1, Math.ceil(seconds / 60));
+  const groups = generatedBulkScanGroups(total);
+  const unitPrice = getUnitPrice();
+  runMode = 4;
+  $("#fourRuns")?.classList.add("active");
+  $("#threeRuns")?.classList.remove("active");
+  setScanProgress(`${total}個を連続読取中`, 35);
+  $("#scanStatus").textContent = `${total}個モード: ${clips}本に分けて読み取り、重複を除去しています`;
+  const scannedStops = groups.map((item, index) => ({
+    id: Date.now() + index,
+    wave: item.wave,
+    parcels: item.parcels,
+    name: item.address,
+    area: item.area,
+    deadline: item.deadline,
+    distance: 0.7 + index * 0.12,
+    fee: item.parcels * unitPrice,
+    weight: Math.round(item.parcels * 0.45),
+    tags: ["映像読取", `${item.wave}便`, `${item.parcels}個`],
+    lat: item.lat,
+    lng: item.lng
+  }));
+  orderedStops = [
+    ...orderedStops.filter((stop) => !stop.tags?.includes("映像読取")),
+    ...scannedStops
+  ];
+  optimizeStops();
+  setScanProgress("400個対応の便分け・積み順へ反映", 100);
+  const routeText = `${total}個を${groups.length}束に集約。撮影目安は約${seconds}秒、${Math.ceil(seconds / clips)}秒 x ${clips}本。1〜3便の固定配送と4便当日配送候補へ振り分けました。`;
+  renderVideoScanResults(groups, routeText);
+  $("#videoScanCount").textContent = `${total}個読取`;
+  $("#scanStatus").textContent = "連続読取完了。束単位で便分け・積み順・ルートに反映しました";
 }
 
 function bulkVideoScan() {
@@ -1573,6 +1651,9 @@ $("#bufferMinutes").addEventListener("input", renderAll);
 $("#startCamera").addEventListener("click", startCamera);
 $("#captureParcel").addEventListener("click", captureParcel);
 $("#bulkVideoScan").addEventListener("click", bulkVideoScan);
+$("#bulk400Scan").addEventListener("click", bulk400Scan);
+$("#scanTargetCount").addEventListener("input", renderScanCapacity);
+$("#scanSpeed").addEventListener("change", renderScanCapacity);
 $("#viewScannedRoute").addEventListener("click", () => {
   document.querySelector('[data-panel="dashboard"]')?.click();
   setTimeout(forceVisibleMapSync, 400);
@@ -1583,3 +1664,4 @@ $("#parseVoice").addEventListener("click", parseVoiceText);
 $("#openMaps").addEventListener("click", openMaps);
 
 renderAll();
+renderScanCapacity();

@@ -1161,6 +1161,35 @@ video {
   transition: width 0.25s ease;
 }
 
+.scan-capacity {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+  border: 1px solid rgba(15, 139, 141, 0.28);
+  border-radius: 8px;
+  padding: 12px;
+  background: #f3fbfa;
+}
+
+.scan-capacity strong {
+  color: var(--accent-strong);
+  font-size: 15px;
+}
+
+.scan-capacity p {
+  margin: 0;
+  color: #34414d;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.5;
+}
+
+.scan-capacity-controls {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.8fr) minmax(170px, 1.2fr);
+  gap: 10px;
+}
+
 textarea {
   width: 100%;
   margin: 16px 0 12px;
@@ -1704,6 +1733,10 @@ label input {
 
   .cockpit-actions {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .scan-capacity-controls {
+    grid-template-columns: 1fr;
   }
 
   .cockpit-actions button {
