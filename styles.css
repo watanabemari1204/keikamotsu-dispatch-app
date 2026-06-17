@@ -587,6 +587,72 @@ button {
   background: var(--accent);
 }
 
+.color-load-sheet {
+  display: grid;
+  gap: 8px;
+  border: 1px solid rgba(23, 37, 50, 0.12);
+  border-radius: 8px;
+  padding: 10px;
+  background: white;
+}
+
+.color-load-sheet > strong {
+  font-size: 13px;
+}
+
+.color-load-row {
+  display: grid;
+  grid-template-columns: 34px 1fr;
+  gap: 8px;
+  align-items: center;
+}
+
+.color-load-row > span {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border-radius: 50%;
+  color: white;
+  font-weight: 900;
+}
+
+.color-load-row.red > span {
+  background: #c74343;
+}
+
+.color-load-row.yellow > span {
+  background: #c17900;
+}
+
+.color-load-row.blue > span {
+  background: #2563eb;
+}
+
+.color-load-row b,
+.color-load-row small {
+  display: block;
+}
+
+.color-load-row b {
+  font-size: 13px;
+}
+
+.color-load-row small,
+.load-saving {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.load-saving {
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: #eefafa;
+  color: var(--accent-strong);
+}
+
 .wave-card p,
 .wave-card small {
   margin: 0;

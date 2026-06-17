@@ -312,6 +312,44 @@ function estimateWaveEnd(wave) {
   return Math.round(depart + parcelMinutes + driveMinutes + stopMinutes);
 }
 
+function loadColorSections(wave) {
+  const total = parcelsForRun(wave);
+  const red = Math.max(1, Math.round(total * (wave === 1 ? 0.42 : 0.34)));
+  const yellow = Math.max(1, Math.round(total * (wave === 3 ? 0.38 : 0.4)));
+  const blue = Math.max(0, total - red - yellow);
+  return [
+    {
+      key: "red",
+      label: "赤",
+      range: "近い・最優先",
+      parcels: red,
+      position: "スライドドア側・手前",
+      rule: wave === 1 ? "三田一丁目の午前指定、最初に降ろす" : "現在地から近いビル、戻り時間に影響する荷物"
+    },
+    {
+      key: "yellow",
+      label: "黄",
+      range: "普通・中盤",
+      parcels: yellow,
+      position: "中央棚・腰の高さ",
+      rule: "同じ通りの法人受付、赤の次にまとめて降ろす"
+    },
+    {
+      key: "blue",
+      label: "青",
+      range: "遠い・後半",
+      parcels: blue,
+      position: "奥・最後に出す箱",
+      rule: "芝三丁目側や戻り前の後半ブロック"
+    }
+  ];
+}
+
+function loadColorSaving(wave) {
+  const total = parcelsForRun(wave);
+  return Math.max(4, Math.round(total * 0.13));
+}
+
 function renderWavePlan() {
   const grid = $("#waveGrid");
   if (!grid) return;
@@ -323,8 +361,9 @@ function renderWavePlan() {
   wavePlan.forEach((plan) => {
     const runTime = timeline[plan.wave - 1];
     const targets = waveStops(plan.wave);
-    const parcels = targets.reduce((sum, stop) => sum + (stop.parcels || 1), 0);
+    const parcels = parcelsForRun(plan.wave);
     const weight = targets.reduce((sum, stop) => sum + stop.weight, 0);
+    const colorSections = loadColorSections(plan.wave);
     const shownEnd = runTime?.returnTime || estimateWaveEnd(plan.wave);
     const endLabel = plan.wave === 2 ? "勝島戻り見込" : "配送完了見込";
     const loadLabel = plan.wave === 1 ? `朝作業 ${formatClock(workStart)}-${formatClock(runTime.depart)}` : `車積み ${reloadOnly}分`;
@@ -341,6 +380,19 @@ function renderWavePlan() {
         <span>${endLabel} ${formatClock(shownEnd)}</span>
       </div>
       <div class="wave-bar"><span style="width: ${Math.min(100, Math.round(parcels / 80 * 100))}%"></span></div>
+      <div class="color-load-sheet">
+        <strong>AI色分け積み込みシート</strong>
+        ${colorSections.map((section) => `
+          <div class="color-load-row ${section.key}">
+            <span>${section.label}</span>
+            <div>
+              <b>${section.range} / ${section.parcels}個</b>
+              <small>${section.position}。${section.rule}</small>
+            </div>
+          </div>
+        `).join("")}
+      </div>
+      <div class="load-saving">探す時間を約${loadColorSaving(plan.wave)}分短縮。色だけ見て降ろす順を判断</div>
       <p>${plan.note}</p>
       <small>${targets.length}エリア / ${weight}kg</small>
     `;
@@ -659,7 +711,7 @@ function renderDriverSimulation() {
     <span>平均3便後戻り ${formatClock(avgRun3Return)} / 80%ライン ${formatClock(p80Run3)} / 最終平均 ${formatClock(avgFinal)}</span>
     <span>4便を取りにいける期待上乗せ ${yen.format(earningStable)}。一番多い詰まり要因は ${topBlocker[0]} ${topBlocker[1]}回。</span>
     <strong class="rescue-line">救済モードなら ${rescueLoadOk}% / 平均戻り ${formatClock(rescueAvgRun3)} / 80%ライン ${formatClock(rescueSortedRun3[79].run3Return)} / 期待上乗せ ${yen.format(rescueEarningStable)}</strong>
-    <span>条件: 朝仕分け15分短縮、2・3便積み10分、駐車候補を先決め、受付待ち削減、3便は14:30勝島戻り優先で戻る。</span>
+    <span>条件: 赤黄青の色分け積み込み、朝仕分け15分短縮、2・3便積み10分、駐車候補を先決め、受付待ち削減、3便は14:30勝島戻り優先で戻る。</span>
   `;
 
   const grid = $("#driverSimGrid");
