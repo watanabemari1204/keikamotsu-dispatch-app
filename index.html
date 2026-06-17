@@ -16,7 +16,7 @@
       integrity="sha256-p4NxAoJBhIINfQvQbM+TgGyEoYOY0O5pYf67R7sQ4hA="
       crossorigin=""
     />
-    <link rel="stylesheet" href="./styles.css?v=readcolor38" />
+    <link rel="stylesheet" href="./styles.css?v=allpins39" />
   </head>
   <body>
     <div class="app-shell">
@@ -443,6 +443,7 @@
                   <strong>読取地点マップ</strong>
                   <span id="scanMapStatus">400個モード実行後に地点を表示</span>
                 </div>
+                <button class="secondary-button full" id="toggleAllScanPins" type="button">全ピン表示</button>
                 <div class="scan-map" id="scanMap" aria-label="読み取り配送地点マップ">
                   <div class="map-fallback">読み取り後、三田一丁目・芝三丁目の配送地点をここに表示します</div>
                 </div>
@@ -576,7 +577,7 @@
       integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
       crossorigin=""
     ></script>
-    <script src="./app.js?v=readcolor38"></script>
+    <script src="./app.js?v=allpins39"></script>
     <script>
       if ("serviceWorker" in navigator && location.protocol !== "file:") {
         window.addEventListener("load", () => {

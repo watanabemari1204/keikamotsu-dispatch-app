@@ -1117,6 +1117,10 @@ button {
   margin-bottom: 10px;
 }
 
+.scan-map-panel > button {
+  margin-bottom: 10px;
+}
+
 .scan-map-head strong {
   color: var(--ink);
 }

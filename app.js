@@ -67,6 +67,9 @@ let liveBaseLayer;
 let scanMap;
 let scanMapLayer;
 let scanBaseLayer;
+let scanMapShowAllPins = false;
+let lastScanGroups = [];
+let lastScanReads = [];
 let activeMapRoute = [];
 let autopilotEnabled = false;
 let reminderTimer;
@@ -1570,6 +1573,8 @@ function renderRawScanLog(rawReads = []) {
 function renderVideoScanResults(items, routeText, rawReads = []) {
   $("#videoScanCount").textContent = `${items.reduce((sum, item) => sum + item.parcels, 0)}個読取`;
   $("#videoRouteSummary").textContent = routeText;
+  lastScanGroups = items;
+  lastScanReads = rawReads;
   renderRawScanLog(rawReads);
   renderScanDetailMap(items, rawReads);
   const plan = scannedRoutePlan(items);
@@ -1601,10 +1606,11 @@ function renderScanDetailMap(groups = [], rawReads = []) {
     ...groups,
     { name: depot.name, area: "勝島", lat: depot.lat, lng: depot.lng, isDepot: true }
   ];
-  const visibleReads = rawReads.slice(0, 80);
+  const visibleReads = scanMapShowAllPins ? rawReads : rawReads.slice(0, 80);
   $("#scanMapStatus").textContent = rawReads.length
-    ? `個別地点 ${rawReads.length}件 / 地図表示 ${visibleReads.length}点 / 集約 ${groups.length}束`
+    ? `個別地点 ${rawReads.length}件 / 地図表示 ${visibleReads.length}点 / 集約 ${groups.length}束${scanMapShowAllPins ? " / 全ピン表示中" : " / 軽量表示"}`
     : `集約 ${groups.length}束を表示`;
+  $("#toggleAllScanPins").textContent = scanMapShowAllPins ? "軽量表示に戻す" : "全ピン表示";
 
   if (!window.L) {
     canvas.innerHTML = "<div class=\"map-fallback\">地図ライブラリ読込後に配送地点を表示します</div>";
@@ -2077,6 +2083,10 @@ $("#bulkVideoScan").addEventListener("click", bulkVideoScan);
 $("#bulk400Scan").addEventListener("click", bulk400Scan);
 $("#scanTargetCount").addEventListener("input", renderScanCapacity);
 $("#scanSpeed").addEventListener("change", renderScanCapacity);
+$("#toggleAllScanPins").addEventListener("click", () => {
+  scanMapShowAllPins = !scanMapShowAllPins;
+  renderScanDetailMap(lastScanGroups, lastScanReads);
+});
 $("#viewScannedRoute").addEventListener("click", () => {
   document.querySelector('[data-panel="dashboard"]')?.click();
   setTimeout(forceVisibleMapSync, 400);
