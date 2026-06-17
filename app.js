@@ -321,26 +321,26 @@ function loadColorSections(wave) {
     {
       key: "red",
       label: "赤",
-      range: "近い・最優先",
+      range: "効率ルート前半",
       parcels: red,
       position: "スライドドア側・手前",
-      rule: wave === 1 ? "三田一丁目の午前指定、最初に降ろす" : "現在地から近いビル、戻り時間に影響する荷物"
+      rule: "AIが決めた配送順の前半。ここから崩さず降ろす"
     },
     {
       key: "yellow",
       label: "黄",
-      range: "普通・中盤",
+      range: "効率ルート中盤",
       parcels: yellow,
       position: "中央棚・腰の高さ",
-      rule: "同じ通りの法人受付、赤の次にまとめて降ろす"
+      rule: "前半終了後に続けて出す。住所探しで積み直さない"
     },
     {
       key: "blue",
       label: "青",
-      range: "遠い・後半",
+      range: "効率ルート後半",
       parcels: blue,
       position: "奥・最後に出す箱",
-      rule: "芝三丁目側や戻り前の後半ブロック"
+      rule: "後半ブロック。先に触らず最後まで奥に固定"
     }
   ];
 }
@@ -348,6 +348,31 @@ function loadColorSections(wave) {
 function loadColorSaving(wave) {
   const total = parcelsForRun(wave);
   return Math.max(4, Math.round(total * 0.13));
+}
+
+function loadColorLabel(color) {
+  if (color === "red") return "赤";
+  if (color === "yellow") return "黄";
+  return "青";
+}
+
+function loadColorName(color) {
+  if (color === "red") return "効率ルート前半";
+  if (color === "yellow") return "効率ルート中盤";
+  return "効率ルート後半";
+}
+
+function loadColorHex(color) {
+  if (color === "red") return "#c74343";
+  if (color === "yellow") return "#c17900";
+  return "#2563eb";
+}
+
+function classifyLoadColor(group, indexInGroup, totalInGroup) {
+  const ratio = totalInGroup ? indexInGroup / totalInGroup : 0;
+  if (ratio < 0.34) return "red";
+  if (ratio < 0.72) return "yellow";
+  return "blue";
 }
 
 function renderWavePlan() {
@@ -392,7 +417,7 @@ function renderWavePlan() {
           </div>
         `).join("")}
       </div>
-      <div class="load-saving">探す時間を約${loadColorSaving(plan.wave)}分短縮。色だけ見て降ろす順を判断</div>
+      <div class="load-saving">探す時間を約${loadColorSaving(plan.wave)}分短縮。色は配送順ではなく、AIルート順を守るための積み位置</div>
       <p>${plan.note}</p>
       <small>${targets.length}エリア / ${weight}kg</small>
     `;
@@ -711,7 +736,7 @@ function renderDriverSimulation() {
     <span>平均3便後戻り ${formatClock(avgRun3Return)} / 80%ライン ${formatClock(p80Run3)} / 最終平均 ${formatClock(avgFinal)}</span>
     <span>4便を取りにいける期待上乗せ ${yen.format(earningStable)}。一番多い詰まり要因は ${topBlocker[0]} ${topBlocker[1]}回。</span>
     <strong class="rescue-line">救済モードなら ${rescueLoadOk}% / 平均戻り ${formatClock(rescueAvgRun3)} / 80%ライン ${formatClock(rescueSortedRun3[79].run3Return)} / 期待上乗せ ${yen.format(rescueEarningStable)}</strong>
-    <span>条件: 赤黄青の色分け積み込み、朝仕分け15分短縮、2・3便積み10分、駐車候補を先決め、受付待ち削減、3便は14:30勝島戻り優先で戻る。</span>
+    <span>条件: 3便でエリアを固める、各便のAI効率ルート順で赤黄青に積み分ける、朝仕分け15分短縮、2・3便積み10分、駐車候補を先決め、受付待ち削減。</span>
   `;
 
   const grid = $("#driverSimGrid");
@@ -1517,6 +1542,10 @@ function renderRawScanLog(rawReads = []) {
     acc[item.wave] = (acc[item.wave] || 0) + 1;
     return acc;
   }, {});
+  const colorCounts = rawReads.reduce((acc, item) => {
+    acc[item.loadColor] = (acc[item.loadColor] || 0) + 1;
+    return acc;
+  }, {});
   log.hidden = false;
   log.innerHTML = `
     <div class="raw-scan-head">
@@ -1528,9 +1557,12 @@ function renderRawScanLog(rawReads = []) {
       <span>2便 ${waveCounts[2] || 0}件</span>
       <span>3便 ${waveCounts[3] || 0}件</span>
       <span>4便候補 ${waveCounts[4] || 0}件</span>
+      <span class="raw-color red">赤 ${colorCounts.red || 0}件</span>
+      <span class="raw-color yellow">黄 ${colorCounts.yellow || 0}件</span>
+      <span class="raw-color blue">青 ${colorCounts.blue || 0}件</span>
     </div>
     <div class="raw-scan-list">
-      ${sample.map((item) => `<span>${item.code} ${item.address} / ${item.wave}便 / ${item.deadline}</span>`).join("")}
+      ${sample.map((item) => `<span><b class="read-color ${item.loadColor}">${loadColorLabel(item.loadColor)}</b>${item.code} ${item.address} / ${item.wave}便 / ${item.deadline} / ${loadColorName(item.loadColor)}</span>`).join("")}
     </div>
   `;
 }
@@ -1603,10 +1635,10 @@ function renderScanDetailMap(groups = [], rawReads = []) {
   visibleReads.forEach((read) => {
     L.circleMarker([read.lat, read.lng], {
       radius: 3,
-      color: read.wave === 1 ? "#2563eb" : read.wave === 2 ? "#0f8b8d" : read.wave === 3 ? "#c17900" : "#c74343",
+      color: loadColorHex(read.loadColor),
       weight: 1,
       fillOpacity: 0.58
-    }).bindPopup(`${read.code}<br>${read.address}<br>${read.wave}便 / ${read.deadline}`).addTo(scanMapLayer);
+    }).bindPopup(`${read.code}<br>${read.address}<br>${loadColorLabel(read.loadColor)} ${loadColorName(read.loadColor)}<br>${read.wave}便 / ${read.deadline}`).addTo(scanMapLayer);
   });
 
   L.polyline(routeStops.map((stop) => [stop.lat, stop.lng]), {
@@ -1709,6 +1741,7 @@ function generatedParcelReads(total) {
         area: group.area,
         wave: group.wave,
         deadline: group.deadline,
+        loadColor: classifyLoadColor(group, index, group.parcels),
         lat: group.lat + (seededNumber(serial + 11) - 0.5) * 0.0022,
         lng: group.lng + (seededNumber(serial + 19) - 0.5) * 0.0022
       });

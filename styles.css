@@ -1218,6 +1218,18 @@ button {
   background: white;
 }
 
+.raw-scan-stats .raw-color.red {
+  color: #a92f2f;
+}
+
+.raw-scan-stats .raw-color.yellow {
+  color: #8a5b00;
+}
+
+.raw-scan-stats .raw-color.blue {
+  color: #1f4fb7;
+}
+
 .raw-scan-list {
   display: grid;
   max-height: 210px;
@@ -1226,9 +1238,34 @@ button {
 }
 
 .raw-scan-list span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   border-radius: 8px;
   padding: 7px 8px;
   background: white;
+}
+
+.read-color {
+  display: inline-grid;
+  min-width: 24px;
+  height: 24px;
+  place-items: center;
+  border-radius: 50%;
+  color: white;
+  font-size: 12px;
+}
+
+.read-color.red {
+  background: #c74343;
+}
+
+.read-color.yellow {
+  background: #c17900;
+}
+
+.read-color.blue {
+  background: #2563eb;
 }
 
 .scan-result-grid {
