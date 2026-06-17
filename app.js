@@ -551,33 +551,36 @@ function driverRunDelay(seed, min, max) {
   return Math.round(min + ratio * (max - min));
 }
 
-function simulateDriverDay(index) {
-  const aiLoad = Number($("#aiLoadMinutes")?.value || 90);
-  const reloadOnly = Number($("#bufferMinutes")?.value || 15);
+function simulateDriverDay(index, rescue = false) {
+  const aiLoad = Math.max(70, Number($("#aiLoadMinutes")?.value || 90) - (rescue ? 15 : 0));
+  const reloadOnly = Math.max(10, Number($("#bufferMinutes")?.value || 15) - (rescue ? 5 : 0));
   const workStart = minutesFromTime($("#workStartTime")?.value || "05:30");
   const advice = routeAdvice();
   const weather = $("#weatherMode")?.value || "cloudy";
   const weatherBoost = weather === "storm" ? 5 : weather === "rain" ? 3 : weather === "cloudy" ? 0 : 0;
   const gotobiBoost = todayProfile().isGotobi ? 3 : 0;
-  const trafficBase = Math.max(0, Math.round((advice.score - 55) / 10));
+  const trafficBase = Math.max(0, Math.round((advice.score - 55) / 10) - (rescue ? 1 : 0));
   const activeRuns = runPlans.filter((plan) => plan.run <= runMode);
-  const morningVariance = driverRunDelay(index * 11 + 1, -10, 12) + driverRunDelay(index * 13 + 2, 0, 3);
+  const morningVariance = rescue
+    ? driverRunDelay(index * 11 + 1, -12, 6) + driverRunDelay(index * 13 + 2, 0, 2)
+    : driverRunDelay(index * 11 + 1, -10, 12) + driverRunDelay(index * 13 + 2, 0, 3);
   let nextDepart = workStart + aiLoad + morningVariance;
   let trafficTotal = 0;
   let parkingTotal = 0;
   let receptionTotal = 0;
   let fatigueTotal = 0;
   const timeline = activeRuns.map((plan) => {
-    const loadSlip = plan.run === 1 ? 0 : driverRunDelay(index * 17 + plan.run, 0, 7);
+    const loadSlip = plan.run === 1 ? 0 : driverRunDelay(index * 17 + plan.run, 0, rescue ? 3 : 7);
     let depart = plan.run === 1 ? nextDepart : nextDepart + reloadOnly + loadSlip;
     if (plan.run === 4) {
       depart = Math.max(depart, minutesFromTime(sameDayLoadDeadline) + reloadOnly + loadSlip);
     }
     const breakdown = runTimeBreakdown(plan.run);
-    const trafficSlip = Math.max(0, trafficBase + weatherBoost + gotobiBoost + driverRunDelay(index * 19 + plan.run, -5, 6));
-    const parkingSlip = driverRunDelay(index * 23 + plan.run, 0, plan.run === 4 ? 2 : 3);
-    const receptionSlip = driverRunDelay(index * 29 + plan.run, 0, plan.run === 1 ? 4 : 3);
-    const fatigueSlip = plan.run >= 3 ? driverRunDelay(index * 31 + plan.run, 0, 2) : 0;
+    const trafficSlip = Math.max(0, trafficBase + weatherBoost + gotobiBoost + driverRunDelay(index * 19 + plan.run, rescue ? -6 : -5, rescue ? 3 : 6));
+    const parkingSlip = driverRunDelay(index * 23 + plan.run, 0, rescue ? 1 : (plan.run === 4 ? 2 : 3));
+    const receptionSlip = driverRunDelay(index * 29 + plan.run, 0, rescue ? 1 : (plan.run === 1 ? 4 : 3));
+    const fatigueSlip = plan.run >= 3 ? driverRunDelay(index * 31 + plan.run, 0, rescue ? 1 : 2) : 0;
+    const handlingSave = rescue && plan.run <= 3 ? Math.round(parcelsForRun(plan.run) * 0.09) : 0;
     trafficTotal += trafficSlip;
     parkingTotal += parkingSlip;
     receptionTotal += receptionSlip;
@@ -590,8 +593,9 @@ function simulateDriverDay(index) {
       + trafficSlip
       + parkingSlip
       + receptionSlip
-      + fatigueSlip;
-    const returnSlip = plan.run === 4 ? 0 : driverRunDelay(index * 37 + plan.run, 0, 4);
+      + fatigueSlip
+      - handlingSave;
+    const returnSlip = plan.run === 4 ? 0 : driverRunDelay(index * 37 + plan.run, 0, rescue ? 2 : 4);
     const returnTime = deliveryFinish + breakdown.returnToDepotMinutes + returnSlip;
     nextDepart = returnTime;
     return { run: plan.run, depart, deliveryFinish, returnTime };
@@ -629,7 +633,9 @@ function renderDriverSimulation() {
   if (!panel) return;
   try {
   const results = Array.from({ length: 100 }, (_, index) => simulateDriverDay(index + 1));
+  const rescueResults = Array.from({ length: 100 }, (_, index) => simulateDriverDay(index + 1, true));
   const loadOk = results.filter((item) => item.fourthLoadOk).length;
+  const rescueLoadOk = rescueResults.filter((item) => item.fourthLoadOk).length;
   const run2Ok = results.filter((item) => item.run2Ok).length;
   const finalOk = results.filter((item) => item.finalOk).length;
   const avgRun3Return = Math.round(results.reduce((sum, item) => sum + item.run3Return, 0) / results.length);
@@ -643,12 +649,17 @@ function renderDriverSimulation() {
   }, {});
   const topBlocker = Object.entries(blockerCounts).sort((a, b) => b[1] - a[1])[0];
   const earningStable = Math.round(loadOk / 100 * parcelsForRun(4) * getUnitPrice());
+  const rescueEarningStable = Math.round(rescueLoadOk / 100 * parcelsForRun(4) * getUnitPrice());
+  const rescueSortedRun3 = [...rescueResults].sort((a, b) => a.run3Return - b.run3Return);
+  const rescueAvgRun3 = Math.round(rescueResults.reduce((sum, item) => sum + item.run3Return, 0) / rescueResults.length);
 
-  $("#driverSimBadge").textContent = `${loadOk}/100回 4便積込OK`;
+  $("#driverSimBadge").textContent = `${loadOk}→${rescueLoadOk}/100回`;
   $("#driverSimSummary").innerHTML = `
     <strong>${loadOk}%の確率で14:30までに勝島へ戻れる想定</strong>
     <span>平均3便後戻り ${formatClock(avgRun3Return)} / 80%ライン ${formatClock(p80Run3)} / 最終平均 ${formatClock(avgFinal)}</span>
     <span>4便を取りにいける期待上乗せ ${yen.format(earningStable)}。一番多い詰まり要因は ${topBlocker[0]} ${topBlocker[1]}回。</span>
+    <strong class="rescue-line">救済モードなら ${rescueLoadOk}% / 平均戻り ${formatClock(rescueAvgRun3)} / 80%ライン ${formatClock(rescueSortedRun3[79].run3Return)} / 期待上乗せ ${yen.format(rescueEarningStable)}</strong>
+    <span>条件: 朝仕分け15分短縮、2・3便積み10分、駐車候補を先決め、受付待ち削減、3便は14:30勝島戻り優先で戻る。</span>
   `;
 
   const grid = $("#driverSimGrid");
@@ -656,6 +667,7 @@ function renderDriverSimulation() {
   [
     { label: "2便後14時", value: `${run2Ok}%`, note: "2便後に勝島へ戻れる率" },
     { label: "4便積込14:30", value: `${loadOk}%`, note: "3便後に勝島へ戻れる率" },
+    { label: "救済後14:30", value: `${rescueLoadOk}%`, note: "時短運用を全部入れた場合" },
     { label: "全便完了", value: `${finalOk}%`, note: "4便まで無理なく終える率" },
     { label: "最悪ケース", value: formatClock(worst.run3Return), note: `${worst.index}回目 / 主因 ${worst.blocker}` }
   ].forEach((item) => {
