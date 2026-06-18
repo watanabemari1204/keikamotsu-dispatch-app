@@ -58,6 +58,13 @@ const demoVideoScanParcels = [
 
 const $ = (selector) => document.querySelector(selector);
 const yen = new Intl.NumberFormat("ja-JP", { style: "currency", currency: "JPY", maximumFractionDigits: 0 });
+const escapeHtml = (value = "") => String(value).replace(/[&<>"']/g, (char) => ({
+  "&": "&amp;",
+  "<": "&lt;",
+  ">": "&gt;",
+  "\"": "&quot;",
+  "'": "&#39;"
+}[char]));
 
 let orderedStops = [...stops];
 let sameDayCount = 0;
@@ -2231,6 +2238,7 @@ function runAsklPagesTest() {
   setScanProgress("ASKL Pages 400件を住所読取", 100);
   updateScanCounter({ read: rawReads.length, target: rawReads.length, confirmed: rawReads.length - sim.thirdMissed - sim.thirdWrongWave, retry: sim.thirdMissed + sim.thirdWrongWave + sim.thirdWrongColor, duplicate: sim.thirdDuplicate });
   showScanFeedback("ok", `400件読取OK`);
+  renderReadListFromReads(rawReads, "ASKL");
   const counts = [1, 2, 3, 4].map((wave) => rawReads.filter((read) => read.wave === wave).length);
   renderVideoScanResults(
     groups,
@@ -2282,6 +2290,7 @@ function bulk400Scan() {
   renderVideoScanResults(groups, routeText, rawReads);
   updateScanCounter({ read: rawReads.length, target: rawReads.length, confirmed: rawReads.length - sim.finalMissed - sim.finalWrongWave, retry: sim.finalMissed + sim.finalWrongWave + sim.finalWrongColor, duplicate: sim.finalDuplicate });
   showScanFeedback("ok", `${rawReads.length}件読取OK`);
+  renderReadListFromReads(rawReads, "DEMO400");
   $("#videoScanCount").textContent = `${total}個読取`;
   $("#scanStatus").textContent = "連続読取完了。束単位で便分け・積み順・ルートに反映しました";
 }
@@ -2396,7 +2405,20 @@ function addOcrAttempt({ ok = false, code = "", address = "", confidence = 0, ra
     raw: raw ? raw.replace(/\s+/g, " ").slice(0, 120) : "",
     reason
   });
-  ocrAttempts = ocrAttempts.slice(0, 30);
+  ocrAttempts = ocrAttempts.slice(0, 400);
+  renderOcrReadList();
+}
+
+function renderReadListFromReads(reads = [], sourceLabel = "読取") {
+  ocrAttempts = reads.map((read) => ({
+    id: `${sourceLabel}-${read.code}`,
+    ok: true,
+    code: read.code,
+    address: read.address,
+    confidence: 100,
+    raw: `${read.wave}便 ${read.routeOrder || "-"}番 ${loadColorLabel(read.loadColor)} ${read.area}`,
+    reason: ""
+  })).slice(0, 400);
   renderOcrReadList();
 }
 
@@ -2409,9 +2431,9 @@ function renderOcrReadList() {
     <article class="${item.ok ? "ok" : "fail"}">
       <b>${item.ok ? "○" : "△"}</b>
       <div>
-        <strong>${index + 1}. ${item.ok ? item.code : "再読取"} / ${item.confidence}%</strong>
-        <span>${item.address || item.reason || "住所未検出"}</span>
-        <small>${item.raw || "OCR文字なし"}</small>
+        <strong>${index + 1}. ${escapeHtml(item.ok ? item.code : "再読取")} / ${item.confidence}%</strong>
+        <span>${escapeHtml(item.address || item.reason || "住所未検出")}</span>
+        <small>${escapeHtml(item.raw || "OCR文字なし")}</small>
       </div>
     </article>
   `).join("");
@@ -2432,11 +2454,13 @@ async function captureParcel() {
   const video = $("#cameraPreview");
   if (!video?.srcObject) {
     $("#scanStatus").textContent = "先にカメラ起動を押してください";
+    addOcrAttempt({ ok: false, code: `OCR-${String(ocrAttempts.length + 1).padStart(4, "0")}`, confidence: 0, reason: "カメラ未起動", raw: "カメラ起動なし" });
     showScanFeedback("fail", "カメラ未起動");
     return;
   }
   if (!window.Tesseract) {
     $("#scanStatus").textContent = "文字読取の部品を読み込めません。再読込するか、ASKL Pages 400件テストで検証してください";
+    addOcrAttempt({ ok: false, code: `OCR-${String(ocrAttempts.length + 1).padStart(4, "0")}`, confidence: 0, reason: "文字読取の部品を読み込めません", raw: "OCRライブラリなし" });
     showScanFeedback("fail", "読取準備不可");
     return;
   }
@@ -2474,6 +2498,7 @@ async function captureParcel() {
     setScanProgress("OCR読取OK", 100);
   } catch (error) {
     $("#scanStatus").textContent = "OCR処理に失敗しました。ASKL Pages 400件テストは利用できます";
+    addOcrAttempt({ ok: false, code: `OCR-${String(ocrAttempts.length + 1).padStart(4, "0")}`, confidence: 0, reason: "OCR処理に失敗", raw: error?.message || "OCR error" });
     showScanFeedback("fail", "OCR失敗");
     setScanProgress("OCR失敗", 100);
   }
