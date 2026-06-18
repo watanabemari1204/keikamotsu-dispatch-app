@@ -1870,6 +1870,8 @@ function renderScanQaPanel(rawReads = [], visibleReads = [], navReads = []) {
     panel.classList.remove("ok", "warn");
     return;
   }
+  const scopedReads = filteredScanReads(rawReads);
+  const scopeLabel = scanMapWaveFilter === "all" ? "全体" : `${scanMapWaveFilter}便`;
   const listCount = document.querySelectorAll("#ocrReadItems article").length;
   const colorCounts = ["red", "yellow", "blue"].map((color) => rawReads.filter((read) => read.loadColor === color).length);
   const waveCounts = [1, 2, 3, 4].map((wave) => rawReads.filter((read) => read.wave === wave).length);
@@ -1877,12 +1879,13 @@ function renderScanQaPanel(rawReads = [], visibleReads = [], navReads = []) {
     const orders = rawReads.filter((read) => read.wave === wave).map((read) => read.routeOrder).sort((a, b) => a - b);
     return orders.every((order, index) => order === index + 1);
   });
-  const ok = listCount === rawReads.length && visibleReads.length === rawReads.length && routeOrderOk;
+  const targetVisibleCount = scanMapWaveFilter === "all" ? rawReads.length : scopedReads.length;
+  const ok = listCount === rawReads.length && visibleReads.length === targetVisibleCount && routeOrderOk;
   panel.classList.toggle("ok", ok);
   panel.classList.toggle("warn", !ok);
   panel.innerHTML = `
     <strong>${ok ? "読取・地図・順番 OK" : "確認が必要"}</strong>
-    <span>読取${rawReads.length}件 / リスト${listCount}件 / 地図ピン${visibleReads.length}点 / ナビ代表${navReads.length}点</span>
+    <span>読取${rawReads.length}件 / リスト${listCount}件 / ${scopeLabel}ピン${visibleReads.length}/${targetVisibleCount}点 / ナビ代表${navReads.length}点</span>
     <span>便: 1便${waveCounts[0]} / 2便${waveCounts[1]} / 3便${waveCounts[2]} / 4便${waveCounts[3]} ・ 色: 赤${colorCounts[0]} 黄${colorCounts[1]} 青${colorCounts[2]}</span>
   `;
 }
