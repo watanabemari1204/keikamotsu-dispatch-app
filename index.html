@@ -16,7 +16,7 @@
       integrity="sha256-p4NxAoJBhIINfQvQbM+TgGyEoYOY0O5pYf67R7sQ4hA="
       crossorigin=""
     />
-    <link rel="stylesheet" href="./styles.css?v=photoread56" />
+    <link rel="stylesheet" href="./styles.css?v=photostop58" />
   </head>
   <body>
     <div class="app-shell">
@@ -360,7 +360,6 @@
               <div class="scan-actions">
                 <button class="secondary-button" id="captureParcel" type="button">読取チェック</button>
                 <button class="secondary-button" id="photoReadButton" type="button">写真で読取</button>
-                <button class="secondary-button" id="bulkVideoScan" type="button">動画OCR診断</button>
                 <button class="ghost-button" id="clearWorkdayData" type="button">業務終了・消去</button>
                 <button class="ghost-button" id="demoScan" type="button">デモ読取</button>
                 <input id="photoReadInput" type="file" accept="image/*" capture="environment" hidden />
@@ -393,13 +392,13 @@
               <div class="ocr-read-list" id="ocrReadList" hidden>
                 <div class="ocr-read-list-head">
                   <strong>読取済み住所リスト</strong>
-                  <span>OK/NGと住所をここに残します</span>
+                  <span>住所の開始/終了を切り出して残します</span>
                 </div>
                 <div id="ocrReadItems"></div>
               </div>
               <div class="scan-capacity">
-                <strong id="scanCapacityTitle">最大400個まで連続読取</strong>
-                <p id="scanTimeGuide">目安: 400個は約160〜200秒。60秒ずつ3〜4本に分けると安定します。</p>
+                <strong id="scanCapacityTitle">最大400件まで住所リスト検証</strong>
+                <p id="scanTimeGuide">写真は50〜100件ずつ確認。住所の開始/終了を切り出せた分だけ件数に入れます。</p>
                 <div class="scan-capacity-controls">
                   <label>
                     読取個数
@@ -414,7 +413,7 @@
                     </select>
                   </label>
                 </div>
-                <button class="secondary-button full" id="bulk400Scan" type="button">400個連続読取モード</button>
+                <button class="secondary-button full" id="bulk400Scan" type="button">400件住所リスト検証</button>
                 <button class="secondary-button full" id="asklPagesTest" type="button">ASKL Pages 400件テスト</button>
                 <button class="primary-button full" id="doubleScanSim" type="button">2回読取で精度シミュレーション</button>
                 <button class="secondary-button full" id="tripleScanSim" type="button">3回読取まで比較</button>
@@ -461,16 +460,16 @@
             <section class="scan-card video-route-card">
               <div class="section-head">
                 <div>
-                  <span class="section-kicker">Camera Route Test</span>
-                  <h3>カメラ読取テストからルート提示</h3>
+                  <span class="section-kicker">Photo Route Test</span>
+                  <h3>写真読取テストからルート提示</h3>
                 </div>
                 <strong id="videoScanCount">未読取</strong>
               </div>
               <div class="video-route-summary" id="videoRouteSummary">
-                カメラ接続と住所読取を分けて確認します。400件の確実な検証は ASKL Pages 400件テストで行います。
+                写真/静止画で住所の開始と終了を切り出し、住所として確定できたものだけルートへ反映します。
               </div>
               <div class="ocr-note">
-                カメラが映っても、住所が読めたとは限りません。読取チェックで1件ずつ確認し、400件テストはASKL Pagesボタンを使います。
+                動画OCRはいったん停止中です。写真で50〜100件ずつ読み、住所候補だけをリスト化して確認します。
               </div>
               <div class="scan-map-panel">
                 <div class="scan-map-head">
@@ -629,8 +628,8 @@
       crossorigin=""
     ></script>
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-    <script src="./askl-test-data.js?v=photoread56"></script>
-    <script src="./app.js?v=photoread56"></script>
+    <script src="./askl-test-data.js?v=photostop58"></script>
+    <script src="./app.js?v=photostop58"></script>
     <script>
       if ("serviceWorker" in navigator && location.protocol !== "file:") {
         window.addEventListener("load", () => {

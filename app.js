@@ -1828,7 +1828,7 @@ function googleMapsUrlForScanWave() {
 function openScanWaveNavigation() {
   const url = googleMapsUrlForScanWave();
   if (!url) {
-    $("#scanStatus").textContent = "先に映像読取または400個連続読取を実行してください";
+    $("#scanStatus").textContent = "先に写真読取または400件住所リスト検証を実行してください";
     return;
   }
   window.open(url, "_blank", "noopener");
@@ -1980,8 +1980,8 @@ function renderScanCapacity() {
   const seconds = Math.ceil(count / speed);
   const clips = Math.max(1, Math.ceil(seconds / 60));
   const clipSeconds = Math.ceil(seconds / clips);
-  $("#scanCapacityTitle").textContent = `最大400個まで連続読取 / 今回 ${count}個`;
-  $("#scanTimeGuide").textContent = `撮影目安: 約${seconds}秒。おすすめは${clipSeconds}秒 x ${clips}本。荷札は0.5秒ほど止めて映すと安定します。`;
+  $("#scanCapacityTitle").textContent = `最大400件まで住所リスト検証 / 今回 ${count}件`;
+  $("#scanTimeGuide").textContent = `写真目安: 50〜100件ずつ確認。動画OCRはいったん停止し、住所の開始/終了を切り出せた分だけ件数に入れます。旧動画換算では約${seconds}秒です。`;
 }
 
 function doubleScanSimulation(rawReads = [], scanPasses = 2) {
@@ -2262,10 +2262,10 @@ function bulk400Scan() {
   runMode = 4;
   $("#fourRuns")?.classList.add("active");
   $("#threeRuns")?.classList.remove("active");
-  setScanProgress(`${total}個を連続読取中`, 35);
+  setScanProgress(`${total}件の住所リスト検証中`, 35);
   updateScanCounter({ read: Math.round(total * 0.35), target: total, confirmed: Math.round(total * 0.28), retry: Math.round(total * 0.07), duplicate: 0 });
   showScanFeedback("retry", `${Math.round(total * 0.35)}件読取中`);
-  $("#scanStatus").textContent = `${total}個モード: ${clips}本に分けて読み取り、重複を除去しています`;
+  $("#scanStatus").textContent = `${total}件モード: 住所候補を切り出し、重複を除去しています`;
   const scannedStops = groups.map((item, index) => ({
     id: Date.now() + index,
     wave: item.wave,
@@ -2276,23 +2276,23 @@ function bulk400Scan() {
     distance: 0.7 + index * 0.12,
     fee: item.parcels * unitPrice,
     weight: Math.round(item.parcels * 0.45),
-    tags: ["映像読取", `${item.wave}便`, `${item.parcels}個`],
+    tags: ["住所リスト検証", `${item.wave}便`, `${item.parcels}個`],
     lat: item.lat,
     lng: item.lng
   }));
   orderedStops = [
-    ...orderedStops.filter((stop) => !stop.tags?.includes("映像読取")),
+    ...orderedStops.filter((stop) => !stop.tags?.includes("住所リスト検証")),
     ...scannedStops
   ];
   optimizeStops();
   setScanProgress("400個対応の便分け・積み順へ反映", 100);
-  const routeText = `${rawReads.length}個の仮住所を個別読取し、${groups.length}束に集約。撮影目安は約${seconds}秒、${Math.ceil(seconds / clips)}秒 x ${clips}本。三田一丁目・芝三丁目周辺を1〜3便固定配送と4便当日配送候補へ振り分けました。`;
+  const routeText = `${rawReads.length}件の住所を個別検証し、${groups.length}束に集約。写真は50〜100件ずつ確認する想定です。三田一丁目・芝三丁目周辺を1〜3便固定配送と4便当日配送候補へ振り分けました。`;
   renderVideoScanResults(groups, routeText, rawReads);
   updateScanCounter({ read: rawReads.length, target: rawReads.length, confirmed: rawReads.length - sim.finalMissed - sim.finalWrongWave, retry: sim.finalMissed + sim.finalWrongWave + sim.finalWrongColor, duplicate: sim.finalDuplicate });
-  showScanFeedback("ok", `${rawReads.length}件読取OK`);
+  showScanFeedback("ok", `${rawReads.length}件検証OK`);
   renderReadListFromReads(rawReads, "DEMO400");
-  $("#videoScanCount").textContent = `${total}個読取`;
-  $("#scanStatus").textContent = "連続読取完了。束単位で便分け・積み順・ルートに反映しました";
+  $("#videoScanCount").textContent = `${total}件検証`;
+  $("#scanStatus").textContent = "住所リスト検証完了。束単位で便分け・積み順・ルートに反映しました";
 }
 
 function runDoubleScanSimulation() {
@@ -2337,50 +2337,92 @@ function runTripleScanSimulation() {
 }
 
 function bulkVideoScan() {
-  setScanProgress("動画OCR診断中", 45);
+  setScanProgress("動画OCR停止中", 45);
   updateScanCounter({ read: 0, target: scanTargetCount(), confirmed: 0, retry: scanTargetCount(), duplicate: 0 });
-  showScanFeedback("retry", "カメラ確認");
-  $("#scanStatus").textContent = "カメラは確認できます。住所を読めたかは読取チェックで判定します";
-  $("#videoScanCount").textContent = "カメラ確認";
-  $("#videoRouteSummary").textContent = "カメラ接続と住所読取は別です。住所が読めた時だけ件数が増えます。400件まとめて検証する場合は ASKL Pages 400件テストを使ってください。";
+  showScanFeedback("retry", "写真読取へ");
+  $("#scanStatus").textContent = "動画OCRはいったん停止中です。写真で読取を使ってください";
+  $("#videoScanCount").textContent = "写真優先";
+  $("#videoRouteSummary").textContent = "動画OCRはいったん停止中です。写真/静止画で住所候補だけを切り出し、確定した住所だけ件数に入れます。";
   const panel = $("#doubleScanPanel");
   if (panel) {
     panel.hidden = false;
     panel.innerHTML = `
       <div class="double-scan-head">
         <div>
-          <span class="section-kicker">Camera Check</span>
-          <strong>カメラ接続と住所読取を分けて確認</strong>
+          <span class="section-kicker">Photo Check</span>
+          <strong>動画OCRはいったん停止</strong>
         </div>
         <b>確認中</b>
       </div>
       <div class="double-scan-result">
-        <strong>住所が読めた時だけ、読取件数が増えます</strong>
-        <span>カメラが映るだけでは読取完了ではありません。住所を大きく映して、読取チェックを押してください。</span>
+        <strong>写真で住所の開始/終了を切り出せた時だけ、読取件数が増えます</strong>
+        <span>見えた文字全部は配送データにしません。東京都/港区/丁目/番地がそろった住所候補だけをリスト化します。</span>
         <span>400件まとめて検証する場合は、ASKL Pages 400件テストを押してください。</span>
       </div>
     `;
   }
-  setScanProgress("カメラ確認完了・読取チェックへ", 100);
+  setScanProgress("写真読取へ", 100);
 }
 
 function normalizeOcrText(text = "") {
   return text
     .replace(/[‐‑‒–—―−]/g, "-")
+    .replace(/[ーｰ]/g, "-")
     .replace(/\s+/g, "")
     .replace(/〒/g, "〒");
 }
 
-function extractAddressFromOcr(text = "") {
+function normalizeAddressText(address = "") {
+  return address
+    .replace(/^〒?(\d{3})-?(\d{4})/, "〒$1-$2")
+    .replace(/^(?!〒)(港区)/, "東京都$1");
+}
+
+function ocrCodeNear(normalized = "", index = 0, fallbackIndex = 1) {
+  const before = normalized.slice(Math.max(0, index - 48), index + 12);
+  return before.match(/ASKL-?\d{3,4}|K-?\d{3,4}/i)?.[0]?.toUpperCase().replace(/([A-Z]+)-?(\d+)/, "$1-$2")
+    || `OCR-${String(ocrReadCount + fallbackIndex).padStart(4, "0")}`;
+}
+
+function addressScore(address = "") {
+  const hasPostal = /〒?\d{3}-?\d{4}/.test(address);
+  const hasTokyoMinato = /東京都?港区|港区/.test(address);
+  const hasTargetArea = /(芝|三田)[一二三123１２３]丁目/.test(address);
+  const hasBlock = /\d{1,2}-\d{1,2}/.test(address);
+  return [hasPostal, hasTokyoMinato, hasTargetArea, hasBlock, Boolean(address)].filter(Boolean).length;
+}
+
+function extractAddressesFromOcr(text = "") {
   const normalized = normalizeOcrText(text);
-  const code = normalized.match(/ASKL-?\d{3,4}|K-?\d{3,4}/i)?.[0]?.toUpperCase().replace(/([A-Z]+)-?(\d+)/, "$1-$2") || `OCR-${String(ocrReadCount + 1).padStart(4, "0")}`;
-  const address = normalized.match(/(?:〒\d{3}-?\d{4})?東京都港区(?:芝|三田)[一二三123１２３]丁目\d{1,2}-\d{1,2}/)?.[0] || "";
-  const hasPostal = /〒?\d{3}-?\d{4}/.test(normalized);
-  const hasTokyoMinato = /東京都?港区|港区/.test(normalized);
-  const hasTargetArea = /(芝|三田)[一二三123１２３]丁目/.test(normalized);
-  const hasBlock = /\d{1,2}-\d{1,2}/.test(normalized);
-  const score = [hasPostal, hasTokyoMinato, hasTargetArea, hasBlock, Boolean(address)].filter(Boolean).length;
-  return { code, address, score, normalized };
+  const addressPattern = /(?:〒\d{3}-?\d{4})?(?:東京都)?港区(?:芝|三田)[一二三123１２３]丁目\d{1,2}-\d{1,2}(?:-\d{1,2})?/g;
+  const seen = new Set();
+  const candidates = [];
+  let match;
+  while ((match = addressPattern.exec(normalized)) !== null) {
+    const address = normalizeAddressText(match[0]);
+    if (seen.has(address)) continue;
+    seen.add(address);
+    candidates.push({
+      code: ocrCodeNear(normalized, match.index, candidates.length + 1),
+      address,
+      score: addressScore(address),
+      raw: `住所範囲 ${match.index + 1}-${match.index + match[0].length}: ${address}`,
+      index: match.index
+    });
+  }
+  return { candidates, normalized };
+}
+
+function extractAddressFromOcr(text = "") {
+  const extracted = extractAddressesFromOcr(text);
+  const first = extracted.candidates[0] || {};
+  return {
+    code: first.code || `OCR-${String(ocrReadCount + 1).padStart(4, "0")}`,
+    address: first.address || "",
+    score: first.score || 0,
+    normalized: extracted.normalized,
+    candidates: extracted.candidates
+  };
 }
 
 function renderOcrProof({ ok = false, address = "", confidence = 0, raw = "", reason = "" } = {}) {
@@ -2406,6 +2448,11 @@ function addOcrAttempt({ ok = false, code = "", address = "", confidence = 0, ra
     reason
   });
   ocrAttempts = ocrAttempts.slice(0, 400);
+  renderOcrReadList();
+}
+
+function addOcrAttempts(items = []) {
+  ocrAttempts = [...items, ...ocrAttempts].slice(0, 400);
   renderOcrReadList();
 }
 
@@ -2491,24 +2538,43 @@ async function runOcrOnCanvas(canvas, sourceLabel = "OCR") {
     });
     const rawText = result.data?.text || "";
     const confidence = result.data?.confidence || 0;
-    const extracted = extractAddressFromOcr(rawText);
-    const ok = Boolean(extracted.address) && extracted.score >= 4 && confidence >= 35;
+    const extracted = extractAddressesFromOcr(rawText);
+    const readableAddresses = extracted.candidates.filter((item) => item.address && item.score >= 4);
+    const ok = readableAddresses.length > 0 && confidence >= 35;
     if (!ok) {
+      const firstCandidate = extracted.candidates[0] || {};
       updateScanCounter({ read: ocrReadCount, target: scanTargetCount(), confirmed: ocrReadCount, retry: 1, duplicate: 0 });
       $("#scanStatus").textContent = "住所を読めませんでした。画面の反射を避け、住所を大きく映して再読取してください";
-      renderOcrProof({ ok: false, address: extracted.address, confidence, raw: rawText, reason: extracted.address ? "信頼度が低いです" : "住所形式が見つかりません" });
-      addOcrAttempt({ ok: false, code: extracted.code, address: extracted.address, confidence, raw: rawText, reason: extracted.address ? "信頼度が低いです" : "住所形式が見つかりません" });
+      renderOcrProof({ ok: false, address: firstCandidate.address, confidence, raw: rawText, reason: firstCandidate.address ? "信頼度が低いです" : "住所の開始/終了を特定できません" });
+      addOcrAttempt({
+        ok: false,
+        code: firstCandidate.code || `OCR-${String(ocrAttempts.length + 1).padStart(4, "0")}`,
+        address: firstCandidate.address,
+        confidence,
+        raw: firstCandidate.raw || rawText,
+        reason: firstCandidate.address ? "信頼度が低いです" : "住所の開始/終了を特定できません"
+      });
       showScanFeedback("retry", "再読取");
       setScanProgress("住所未検出", 100);
       return;
     }
-    ocrReadCount += 1;
+    const startCount = ocrReadCount;
+    const listItems = readableAddresses.map((item, index) => ({
+      id: `${Date.now()}-${index}`,
+      ok: true,
+      code: item.code || `OCR-${String(startCount + index + 1).padStart(4, "0")}`,
+      address: item.address,
+      confidence: Math.round(confidence),
+      raw: item.raw,
+      reason: ""
+    }));
+    ocrReadCount += listItems.length;
     updateScanCounter({ read: ocrReadCount, target: scanTargetCount(), confirmed: ocrReadCount, retry: 0, duplicate: 0 });
-    $("#scanStatus").textContent = `OCR読取OK: ${extracted.code} / ${extracted.address}`;
+    $("#scanStatus").textContent = `OCR読取OK: 住所${listItems.length}件を切り出しました`;
     $("#videoScanCount").textContent = `${ocrReadCount}件OCR読取`;
-    renderOcrProof({ ok: true, address: extracted.address, confidence, raw: rawText });
-    addOcrAttempt({ ok: true, code: extracted.code, address: extracted.address, confidence, raw: rawText });
-    showScanFeedback("ok", `${ocrReadCount}件目OK`);
+    renderOcrProof({ ok: true, address: listItems.map((item) => item.address).join(" / "), confidence, raw: rawText });
+    addOcrAttempts(listItems);
+    showScanFeedback("ok", `${listItems.length}件OK`);
     setScanProgress("OCR読取OK", 100);
   } catch (error) {
     $("#scanStatus").textContent = "OCR処理に失敗しました。ASKL Pages 400件テストは利用できます";
@@ -2559,7 +2625,7 @@ function clearWorkdayReadData() {
   showScanFeedback("ok", "消去済み");
   $("#scanStatus").textContent = "今日の読取データを消去しました。次の業務は新しく読み取り開始できます";
   $("#videoScanCount").textContent = "未読取";
-  $("#videoRouteSummary").textContent = "写真またはカメラで住所を読み取ると、件数・リスト・ルートへ反映します";
+  $("#videoRouteSummary").textContent = "写真またはカメラ静止画で住所を読み取ると、件数・リスト・ルートへ反映します";
   $("#ocrProofPanel").hidden = true;
   $("#doubleScanPanel").hidden = true;
   $("#rawScanLog").hidden = true;
@@ -2810,7 +2876,7 @@ $("#captureParcel").addEventListener("click", captureParcel);
 $("#photoReadButton").addEventListener("click", () => $("#photoReadInput")?.click());
 $("#photoReadInput").addEventListener("change", readPhotoFile);
 $("#clearWorkdayData").addEventListener("click", clearWorkdayReadData);
-$("#bulkVideoScan").addEventListener("click", bulkVideoScan);
+$("#bulkVideoScan")?.addEventListener("click", bulkVideoScan);
 $("#bulk400Scan").addEventListener("click", bulk400Scan);
 $("#asklPagesTest").addEventListener("click", runAsklPagesTest);
 $("#doubleScanSim").addEventListener("click", runDoubleScanSimulation);
