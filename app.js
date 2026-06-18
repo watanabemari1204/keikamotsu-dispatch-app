@@ -1997,6 +1997,74 @@ function aggregateParcelReads(reads) {
   return [...groups.values()].sort((a, b) => (a.wave - b.wave) || minutesFromTime(a.deadline) - minutesFromTime(b.deadline));
 }
 
+function asklAreaInfo(address = "") {
+  const cleaned = address.replace(/^〒\d{3}-\d{4}\s*/, "").replace("東京都港区", "");
+  const match = cleaned.match(/(芝|三田)(\d)丁目/);
+  const areaKey = match ? `${match[1]}${match[2]}` : "芝1";
+  const info = {
+    "芝1": { area: "芝一丁目", wave: 1, deadline: "09:40", lat: 35.6519, lng: 139.7536 },
+    "芝2": { area: "芝二丁目", wave: 2, deadline: "11:20", lat: 35.6502, lng: 139.7495 },
+    "芝3": { area: "芝三丁目", wave: 3, deadline: "13:35", lat: 35.6522, lng: 139.7458 },
+    "三田3": { area: "三田三丁目", wave: 4, deadline: "16:10", lat: 35.6472, lng: 139.7422 }
+  }[areaKey] || { area: "芝一丁目", wave: 1, deadline: "09:40", lat: 35.6519, lng: 139.7536 };
+  return { ...info, areaKey, cleaned };
+}
+
+function asklPagesTestReads() {
+  const records = window.asklPagesTestRecords || [];
+  const sorted = [...records].sort((a, b) => {
+    const areaA = asklAreaInfo(a.address).areaKey;
+    const areaB = asklAreaInfo(b.address).areaKey;
+    if (areaA !== areaB) return areaA.localeCompare(areaB, "ja");
+    return a.code.localeCompare(b.code);
+  });
+  return sorted.map((record, index) => {
+    const info = asklAreaInfo(record.address);
+    const sameWaveIndex = sorted.slice(0, index).filter((item) => asklAreaInfo(item.address).wave === info.wave).length;
+    const sameWaveTotal = sorted.filter((item) => asklAreaInfo(item.address).wave === info.wave).length;
+    const seed = Number(record.code.replace(/\D/g, "")) || index + 1;
+    const fullAddress = `${record.address} ${record.building} ${record.department}`.trim();
+    return {
+      code: record.code,
+      address: fullAddress,
+      area: info.area,
+      wave: info.wave,
+      deadline: info.deadline,
+      loadColor: classifyLoadColor({ parcels: sameWaveTotal }, sameWaveIndex, sameWaveTotal),
+      lat: info.lat + (seededNumber(seed + 41) - 0.5) * 0.003,
+      lng: info.lng + (seededNumber(seed + 53) - 0.5) * 0.003,
+      source: "ASKL Pages",
+      customer: record.name
+    };
+  });
+}
+
+function runAsklPagesTest() {
+  const rawReads = asklPagesTestReads();
+  if (!rawReads.length) {
+    $("#scanStatus").textContent = "ASKL Pagesテストデータを読み込めませんでした";
+    return;
+  }
+  const groups = aggregateParcelReads(rawReads);
+  lastScanGroups = groups;
+  lastScanReads = rawReads;
+  scanMapShowAllPins = true;
+  scanMapWaveFilter = "all";
+  runMode = 4;
+  $("#fourRuns")?.classList.add("active");
+  $("#threeRuns")?.classList.remove("active");
+  setScanProgress("ASKL Pages 400件を住所読取", 100);
+  const counts = [1, 2, 3, 4].map((wave) => rawReads.filter((read) => read.wave === wave).length);
+  renderVideoScanResults(
+    groups,
+    `PagesファイルからASKL住所${rawReads.length}件を抽出してテスト読取。芝一丁目${counts[0]}件、芝二丁目${counts[1]}件、芝三丁目${counts[2]}件、三田三丁目${counts[3]}件を便別に分け、各便の中で赤黄青を効率順に判定しました。`,
+    rawReads
+  );
+  renderDoubleScanSimulation(rawReads, 3);
+  $("#videoScanCount").textContent = `${rawReads.length}件読取`;
+  $("#scanStatus").textContent = "ASKL Pages 400件テスト完了。地図・便別ナビ・3回読取比較に反映しました";
+}
+
 function bulk400Scan() {
   const total = scanTargetCount();
   const speed = Number($("#scanSpeed")?.value || 2);
@@ -2335,6 +2403,7 @@ $("#startCamera").addEventListener("click", startCamera);
 $("#captureParcel").addEventListener("click", captureParcel);
 $("#bulkVideoScan").addEventListener("click", bulkVideoScan);
 $("#bulk400Scan").addEventListener("click", bulk400Scan);
+$("#asklPagesTest").addEventListener("click", runAsklPagesTest);
 $("#doubleScanSim").addEventListener("click", runDoubleScanSimulation);
 $("#tripleScanSim").addEventListener("click", runTripleScanSimulation);
 $("#scanTargetCount").addEventListener("input", renderScanCapacity);
