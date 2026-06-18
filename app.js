@@ -1696,6 +1696,61 @@ function scanNavReadsForCurrentView(rawReads = []) {
   return sampled;
 }
 
+function deliveryClustersForCurrentView(rawReads = []) {
+  const reads = currentScanWaveReads(rawReads);
+  const navStops = scanNavReadsForCurrentView(rawReads);
+  if (!reads.length) return [];
+  if (!navStops.length) {
+    return [{ anchor: reads[0], items: reads, index: 1 }];
+  }
+  return navStops.map((anchor, index) => {
+    const nextAnchor = navStops[index + 1];
+    const start = reads.findIndex((read) => read.code === anchor.code);
+    const end = nextAnchor ? reads.findIndex((read) => read.code === nextAnchor.code) : reads.length;
+    const items = reads.slice(Math.max(0, start), end > start ? end : reads.length);
+    return { anchor, items, index: index + 1 };
+  }).filter((cluster) => cluster.items.length);
+}
+
+function renderDeliveryOperation(rawReads = []) {
+  const panel = $("#deliveryOperationPanel");
+  if (!panel) return;
+  const reads = currentScanWaveReads(rawReads);
+  if (!reads.length) {
+    panel.innerHTML = "<strong>車と徒歩の配送オペレーションをここに表示します</strong>";
+    return;
+  }
+  const clusters = deliveryClustersForCurrentView(rawReads);
+  const waveLabel = scanWaveName(scanMapWaveFilter);
+  const first = reads[0];
+  const currentClusters = clusters.slice(0, 4);
+  panel.innerHTML = `
+    <div class="operation-head">
+      <div>
+        <span class="section-kicker">Car + Walk</span>
+        <strong>${waveLabel}: 車は代表地点、徒歩は${reads.length}件の個別順</strong>
+      </div>
+      <b>${first.routeOrder || 1}番 ${loadColorLabel(first.loadColor)}</b>
+    </div>
+    <div class="operation-now">
+      <strong>次の配送</strong>
+      <span>${first.code} ${first.address}</span>
+      <span>${loadColorLabel(first.loadColor)} ${loadColorName(first.loadColor)} / ${first.routeColorReason || "ナビ順で積み込み"}</span>
+    </div>
+    <div class="operation-clusters">
+      ${currentClusters.map((cluster) => `
+        <article>
+          <strong>車 ${cluster.index}: ${cluster.anchor.code} 周辺へ移動</strong>
+          <span>徒歩配送 ${cluster.items.length}件 / ${cluster.items[0].routeOrder || "-"}番〜${cluster.items[cluster.items.length - 1].routeOrder || "-"}番</span>
+          <div>
+            ${cluster.items.slice(0, 5).map((item) => `<em class="${item.loadColor}">${item.routeOrder}. ${loadColorLabel(item.loadColor)} ${item.code}</em>`).join("")}
+          </div>
+        </article>
+      `).join("")}
+    </div>
+  `;
+}
+
 function renderScanWaveDashboard(groups = [], rawReads = []) {
   const dashboard = $("#scanWaveDashboard");
   if (!dashboard) return;
@@ -1783,6 +1838,7 @@ function renderScanDetailMap(groups = [], rawReads = []) {
   $("#toggleAllScanPins").textContent = scanMapShowAllPins ? "軽量表示" : "全ピン表示";
   updateScanWaveButtons();
   renderScanWaveDashboard(groups, rawReads);
+  renderDeliveryOperation(rawReads);
 
   if (!window.L) {
     canvas.innerHTML = "<div class=\"map-fallback\">地図ライブラリ読込後に配送地点を表示します</div>";
