@@ -1,10 +1,10 @@
-const CACHE_NAME = "keikamotsu-dispatch-v51";
+const CACHE_NAME = "keikamotsu-dispatch-v52";
 const APP_FILES = [
   "./",
   "./index.html",
-  "./styles.css?v=camerafix51",
-  "./askl-test-data.js?v=camerafix51",
-  "./app.js?v=camerafix51",
+  "./styles.css?v=liveocr52",
+  "./askl-test-data.js?v=liveocr52",
+  "./app.js?v=liveocr52",
   "./manifest.webmanifest",
   "./icon.svg"
 ];

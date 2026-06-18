@@ -1589,6 +1589,19 @@ button {
     #18212a;
 }
 
+body.camera-active,
+body.camera-active .camera-card,
+body.camera-active .camera-frame {
+  touch-action: none;
+}
+
+input,
+select,
+textarea,
+button {
+  font-size: 16px;
+}
+
 video {
   width: 100%;
   height: 100%;

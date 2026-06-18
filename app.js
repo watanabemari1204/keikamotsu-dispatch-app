@@ -74,6 +74,8 @@ let lastScanReads = [];
 let activeMapRoute = [];
 let autopilotEnabled = false;
 let reminderTimer;
+let cameraStream;
+let ocrReadCount = 0;
 const spokenReminderKeys = new Set();
 const sameDayLoadDeadline = "14:30";
 
@@ -1492,10 +1494,12 @@ async function startCamera() {
   const status = $("#scanStatus");
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false });
+    cameraStream = stream;
     video.srcObject = stream;
     await video.play();
-    status.textContent = "カメラ起動中。住所OCRは未接続のため、現時点では読取診断のみ";
-    showScanFeedback("retry", "OCR未接続");
+    document.body.classList.add("camera-active");
+    status.textContent = "カメラ接続OK。次に読取チェックで住所OCRを試します";
+    showScanFeedback("retry", "カメラ接続OK");
   } catch (error) {
     status.textContent = "カメラを利用できません。デモ読取で確認できます";
     showScanFeedback("fail", "カメラ不可");
@@ -2350,26 +2354,94 @@ function bulkVideoScan() {
   setScanProgress("動画OCRは未接続・ASKLテスト推奨", 100);
 }
 
-function captureParcel() {
-  $("#scanStatus").textContent = "住所OCR未接続です。パソコン画面の住所はまだ実読取できません。ASKL Pages 400件テストで検証してください";
-  $("#videoScanCount").textContent = "実OCR未接続";
-  updateScanCounter({ read: 0, target: scanTargetCount(), confirmed: 0, retry: scanTargetCount(), duplicate: 0 });
-  showScanFeedback("fail", "住所OCR未接続");
+function normalizeOcrText(text = "") {
+  return text
+    .replace(/[‐‑‒–—―−]/g, "-")
+    .replace(/\s+/g, "")
+    .replace(/〒/g, "〒");
+}
+
+function extractAddressFromOcr(text = "") {
+  const normalized = normalizeOcrText(text);
+  const code = normalized.match(/ASKL-?\d{3,4}|K-?\d{3,4}/i)?.[0]?.toUpperCase().replace(/([A-Z]+)-?(\d+)/, "$1-$2") || `OCR-${String(ocrReadCount + 1).padStart(4, "0")}`;
+  const address = normalized.match(/(?:〒\d{3}-?\d{4})?東京都港区(?:芝|三田)[一二三123１２３]丁目\d{1,2}-\d{1,2}/)?.[0] || "";
+  return { code, address };
+}
+
+function canvasFromVideo(video) {
+  const canvas = document.createElement("canvas");
+  const width = video.videoWidth || video.clientWidth || 1280;
+  const height = video.videoHeight || video.clientHeight || 720;
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  context.drawImage(video, 0, 0, width, height);
+  return canvas;
+}
+
+async function captureParcel() {
+  const video = $("#cameraPreview");
+  if (!video?.srcObject) {
+    $("#scanStatus").textContent = "先にカメラ起動を押してください";
+    showScanFeedback("fail", "カメラ未起動");
+    return;
+  }
+  if (!window.Tesseract) {
+    $("#scanStatus").textContent = "OCRライブラリを読み込めません。ネット接続後に再読込するか、ASKL Pages 400件テストで検証してください";
+    showScanFeedback("fail", "OCR読込不可");
+    return;
+  }
+  try {
+    setScanProgress("静止画OCRで住所読取中", 30);
+    $("#scanStatus").textContent = "OCR読取中。住所を大きく明るく枠内に入れてください";
+    const canvas = canvasFromVideo(video);
+    const result = await Tesseract.recognize(canvas, "jpn+eng", {
+      logger: (message) => {
+        if (message.status === "recognizing text") {
+          setScanProgress(`OCR解析 ${Math.round(message.progress * 100)}%`, 35 + Math.round(message.progress * 50));
+        }
+      }
+    });
+    const extracted = extractAddressFromOcr(result.data?.text || "");
+    if (!extracted.address) {
+      updateScanCounter({ read: ocrReadCount, target: scanTargetCount(), confirmed: ocrReadCount, retry: 1, duplicate: 0 });
+      $("#scanStatus").textContent = "住所を読めませんでした。画面の反射を避け、住所を大きく映して再読取してください";
+      showScanFeedback("retry", "再読取");
+      setScanProgress("住所未検出", 100);
+      return;
+    }
+    ocrReadCount += 1;
+    updateScanCounter({ read: ocrReadCount, target: scanTargetCount(), confirmed: ocrReadCount, retry: 0, duplicate: 0 });
+    $("#scanStatus").textContent = `OCR読取OK: ${extracted.code} / ${extracted.address}`;
+    $("#videoScanCount").textContent = `${ocrReadCount}件OCR読取`;
+    showScanFeedback("ok", `${ocrReadCount}件目OK`);
+    setScanProgress("OCR読取OK", 100);
+  } catch (error) {
+    $("#scanStatus").textContent = "OCR処理に失敗しました。ASKL Pages 400件テストは利用できます";
+    showScanFeedback("fail", "OCR失敗");
+    setScanProgress("OCR失敗", 100);
+  }
 }
 
 function preventCameraZoomGestures() {
   const stopGesture = (event) => {
-    if (event.target.closest?.(".camera-frame")) event.preventDefault();
+    if (document.body.classList.contains("camera-active") || event.target.closest?.(".camera-frame")) event.preventDefault();
   };
   ["gesturestart", "gesturechange", "gestureend"].forEach((name) => {
     document.addEventListener(name, stopGesture, { passive: false });
   });
   let lastTouchEnd = 0;
   document.addEventListener("touchend", (event) => {
-    if (!event.target.closest?.(".camera-frame")) return;
+    if (!document.body.classList.contains("camera-active") && !event.target.closest?.(".camera-frame")) return;
     const now = Date.now();
     if (now - lastTouchEnd <= 320) event.preventDefault();
     lastTouchEnd = now;
+  }, { passive: false });
+  document.addEventListener("touchmove", (event) => {
+    if (document.body.classList.contains("camera-active") && event.touches?.length > 1) event.preventDefault();
+  }, { passive: false });
+  document.addEventListener("wheel", (event) => {
+    if (document.body.classList.contains("camera-active") && event.ctrlKey) event.preventDefault();
   }, { passive: false });
 }
 
