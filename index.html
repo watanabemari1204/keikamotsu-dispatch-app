@@ -16,7 +16,7 @@
       integrity="sha256-p4NxAoJBhIINfQvQbM+TgGyEoYOY0O5pYf67R7sQ4hA="
       crossorigin=""
     />
-    <link rel="stylesheet" href="./styles.css?v=photostop58" />
+    <link rel="stylesheet" href="./styles.css?v=addresspaste59" />
   </head>
   <body>
     <div class="app-shell">
@@ -396,6 +396,11 @@
                 </div>
                 <div id="ocrReadItems"></div>
               </div>
+              <div class="paste-address-panel">
+                <strong>住所リスト貼り付け検証</strong>
+                <textarea id="addressPasteText" rows="5" placeholder="港区芝1丁目11-11 住友不動産芝ビル 2階 ABC商事株式会社"></textarea>
+                <button class="primary-button full" id="parseAddressPaste" type="button">貼り付け住所を読取</button>
+              </div>
               <div class="scan-capacity">
                 <strong id="scanCapacityTitle">最大400件まで住所リスト検証</strong>
                 <p id="scanTimeGuide">写真は50〜100件ずつ確認。住所の開始/終了を切り出せた分だけ件数に入れます。</p>
@@ -628,8 +633,8 @@
       crossorigin=""
     ></script>
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-    <script src="./askl-test-data.js?v=photostop58"></script>
-    <script src="./app.js?v=photostop58"></script>
+    <script src="./askl-test-data.js?v=addresspaste59"></script>
+    <script src="./app.js?v=addresspaste59"></script>
     <script>
       if ("serviceWorker" in navigator && location.protocol !== "file:") {
         window.addEventListener("load", () => {

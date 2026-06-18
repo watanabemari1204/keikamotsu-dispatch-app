@@ -1693,6 +1693,61 @@ function applyRouteOrderAndColors(reads = []) {
   return result.sort((a, b) => (a.wave - b.wave) || (a.routeOrder - b.routeOrder));
 }
 
+function readsFromDeliveryCandidates(candidates = [], source = "貼付") {
+  const totalsByWave = {};
+  candidates.forEach((candidate) => {
+    const info = asklAreaInfo(candidate.address);
+    totalsByWave[info.wave] = (totalsByWave[info.wave] || 0) + 1;
+  });
+  const indexesByWave = {};
+  const reads = candidates.map((candidate, index) => {
+    const info = asklAreaInfo(candidate.address);
+    indexesByWave[info.wave] = (indexesByWave[info.wave] || 0) + 1;
+    const seed = index + 1;
+    return {
+      code: candidate.code || `${source}-${String(index + 1).padStart(4, "0")}`,
+      address: candidate.address,
+      area: info.area,
+      wave: info.wave,
+      deadline: info.deadline,
+      loadColor: classifyLoadColor({ parcels: totalsByWave[info.wave] }, indexesByWave[info.wave] - 1, totalsByWave[info.wave]),
+      lat: info.lat + (seededNumber(seed + 71) - 0.5) * 0.0025,
+      lng: info.lng + (seededNumber(seed + 83) - 0.5) * 0.0025,
+      source,
+      raw: candidate.raw
+    };
+  });
+  return applyRouteOrderAndColors(reads);
+}
+
+function applyDeliveryCandidateReads(candidates = [], source = "貼付") {
+  const reads = readsFromDeliveryCandidates(candidates, source);
+  const groups = aggregateParcelReads(reads);
+  renderReadListFromReads(reads, source);
+  renderVideoScanResults(groups, `${reads.length}件を住所行として読取。番地だけで止めず、ビル名・階・会社名まで1配送先として扱います。`, reads);
+  ocrReadCount = reads.length;
+  updateScanCounter({ read: reads.length, target: scanTargetCount(), confirmed: reads.length, retry: 0, duplicate: 0 });
+  $("#videoScanCount").textContent = `${reads.length}件読取`;
+  $("#scanStatus").textContent = `${reads.length}件の住所リストを読み取りました`;
+  renderOcrProof({ ok: true, address: reads.slice(0, 3).map((item) => item.address).join(" / "), confidence: 100, raw: `${reads.length}件の住所行を検出` });
+  showScanFeedback("ok", `${reads.length}件OK`);
+  setScanProgress("住所リスト読取OK", 100);
+  return reads;
+}
+
+function parseAddressPasteText() {
+  const text = $("#addressPasteText")?.value || "";
+  const candidates = extractDeliveryRowsFromText(text);
+  if (!candidates.length) {
+    $("#scanStatus").textContent = "住所行を検出できませんでした。港区芝1丁目11-11 のような行を貼り付けてください";
+    addOcrAttempt({ ok: false, code: "TEXT-0000", confidence: 0, reason: "住所行なし", raw: text.slice(0, 120) });
+    showScanFeedback("fail", "住所なし");
+    setScanProgress("住所行なし", 100);
+    return;
+  }
+  applyDeliveryCandidateReads(candidates, "TEXT");
+}
+
 function scanNavReadsForCurrentView(rawReads = []) {
   const reads = currentScanWaveReads(rawReads);
   if (scanMapWaveFilter === "all") {
@@ -2367,7 +2422,7 @@ function bulkVideoScan() {
 function normalizeOcrText(text = "") {
   return text
     .replace(/[‐‑‒–—―−]/g, "-")
-    .replace(/[ーｰ]/g, "-")
+    .replace(/(\d)[ーｰ](\d)/g, "$1-$2")
     .replace(/\s+/g, "")
     .replace(/〒/g, "〒");
 }
@@ -2376,6 +2431,15 @@ function normalizeAddressText(address = "") {
   return address
     .replace(/^〒?(\d{3})-?(\d{4})/, "〒$1-$2")
     .replace(/^(?!〒)(港区)/, "東京都$1");
+}
+
+function normalizeDeliveryLine(line = "") {
+  return line
+    .replace(/[‐‑‒–—―−]/g, "-")
+    .replace(/(\d)[ーｰ](\d)/g, "$1-$2")
+    .replace(/[　\t]+/g, " ")
+    .replace(/\s{2,}/g, " ")
+    .trim();
 }
 
 function ocrCodeNear(normalized = "", index = 0, fallbackIndex = 1) {
@@ -2392,7 +2456,33 @@ function addressScore(address = "") {
   return [hasPostal, hasTokyoMinato, hasTargetArea, hasBlock, Boolean(address)].filter(Boolean).length;
 }
 
+function extractDeliveryRowsFromText(text = "") {
+  const lines = text.split(/\r?\n/).map(normalizeDeliveryLine).filter(Boolean);
+  const seen = new Set();
+  const candidates = [];
+  const linePattern = /((?:〒\d{3}-?\d{4}\s*)?(?:東京都)?港区(?:芝|三田)[一二三123１２３]丁目\d{1,2}-\d{1,2}(?:-\d{1,2})?)(.*)$/;
+  lines.forEach((line, lineIndex) => {
+    const match = line.match(linePattern);
+    if (!match) return;
+    const deliveryLine = normalizeAddressText(`${match[1]}${match[2] || ""}`.trim());
+    if (seen.has(deliveryLine)) return;
+    seen.add(deliveryLine);
+    candidates.push({
+      code: `TXT-${String(candidates.length + 1).padStart(4, "0")}`,
+      address: deliveryLine,
+      score: addressScore(deliveryLine),
+      raw: `行${lineIndex + 1}: ${deliveryLine}`,
+      index: lineIndex
+    });
+  });
+  return candidates;
+}
+
 function extractAddressesFromOcr(text = "") {
+  const deliveryRows = extractDeliveryRowsFromText(text);
+  if (deliveryRows.length) {
+    return { candidates: deliveryRows, normalized: text };
+  }
   const normalized = normalizeOcrText(text);
   const addressPattern = /(?:〒\d{3}-?\d{4})?(?:東京都)?港区(?:芝|三田)[一二三123１２３]丁目\d{1,2}-\d{1,2}(?:-\d{1,2})?/g;
   const seen = new Set();
@@ -2569,6 +2659,11 @@ async function runOcrOnCanvas(canvas, sourceLabel = "OCR") {
       reason: ""
     }));
     ocrReadCount += listItems.length;
+    if (readableAddresses.length > 1 || readableAddresses[0]?.raw?.startsWith("行")) {
+      applyDeliveryCandidateReads(readableAddresses, sourceLabel.includes("写真") ? "PHOTO" : "OCR");
+      $("#ocrProofConfidence").textContent = `${Math.round(confidence)}%`;
+      return;
+    }
     updateScanCounter({ read: ocrReadCount, target: scanTargetCount(), confirmed: ocrReadCount, retry: 0, duplicate: 0 });
     $("#scanStatus").textContent = `OCR読取OK: 住所${listItems.length}件を切り出しました`;
     $("#videoScanCount").textContent = `${ocrReadCount}件OCR読取`;
@@ -2876,6 +2971,7 @@ $("#captureParcel").addEventListener("click", captureParcel);
 $("#photoReadButton").addEventListener("click", () => $("#photoReadInput")?.click());
 $("#photoReadInput").addEventListener("change", readPhotoFile);
 $("#clearWorkdayData").addEventListener("click", clearWorkdayReadData);
+$("#parseAddressPaste").addEventListener("click", parseAddressPasteText);
 $("#bulkVideoScan")?.addEventListener("click", bulkVideoScan);
 $("#bulk400Scan").addEventListener("click", bulk400Scan);
 $("#asklPagesTest").addEventListener("click", runAsklPagesTest);

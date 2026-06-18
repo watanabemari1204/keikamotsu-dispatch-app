@@ -1849,6 +1849,26 @@ video {
   line-height: 1.35;
 }
 
+.paste-address-panel {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+  border: 1px solid #d6e1ea;
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: #fbfdff;
+}
+
+.paste-address-panel strong {
+  color: var(--ink);
+  font-size: 14px;
+}
+
+.paste-address-panel textarea {
+  min-height: 112px;
+  margin: 0;
+}
+
 .scan-capacity {
   display: grid;
   gap: 10px;
