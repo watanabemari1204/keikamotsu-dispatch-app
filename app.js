@@ -2430,6 +2430,7 @@ function bulkVideoScan() {
 
 function normalizeOcrText(text = "") {
   return text
+    .replace(/[０-９]/g, (char) => String.fromCharCode(char.charCodeAt(0) - 0xFEE0))
     .replace(/[‐‑‒–—―−]/g, "-")
     .replace(/(\d)[ーｰ](\d)/g, "$1-$2")
     .replace(/\s+/g, "")
@@ -2444,6 +2445,7 @@ function normalizeAddressText(address = "") {
 
 function normalizeDeliveryLine(line = "") {
   return line
+    .replace(/[０-９]/g, (char) => String.fromCharCode(char.charCodeAt(0) - 0xFEE0))
     .replace(/[‐‑‒–—―−]/g, "-")
     .replace(/(\d)[ーｰ](\d)/g, "$1-$2")
     .replace(/[　\t]+/g, " ")
@@ -2500,6 +2502,24 @@ function extractDeliveryRowsFromText(text = "") {
     });
     return true;
   };
+  const pushSegmentCandidates = (segment, lineIndex) => {
+    const match = segment.match(linePattern);
+    if (!match) return false;
+    const baseAddress = normalizeSegment(match[1]);
+    const tail = normalizeDeliveryLine(match[2] || "");
+    const floorStarts = [];
+    const floorPattern = /\d{1,2}\s*階/g;
+    let floorMatch;
+    while ((floorMatch = floorPattern.exec(tail)) !== null) floorStarts.push(floorMatch.index);
+    if (floorStarts.length < 2) return pushCandidate(segment, lineIndex);
+    const building = tail.slice(0, floorStarts[0]).trim();
+    floorStarts.forEach((floorStart, floorIndex) => {
+      const floorEnd = floorStarts[floorIndex + 1] ?? tail.length;
+      const floorPart = tail.slice(floorStart, floorEnd).trim();
+      pushCandidate(`${baseAddress} ${building} ${floorPart}`.trim(), lineIndex + floorIndex);
+    });
+    return true;
+  };
 
   const splitByAddressStarts = (value = "", baseIndex = 0) => {
     const textValue = normalizeDeliveryLine(value).replace(/\s+/g, " ");
@@ -2510,7 +2530,7 @@ function extractDeliveryRowsFromText(text = "") {
     starts.forEach((start, index) => {
       const end = starts[index + 1] ?? textValue.length;
       const segment = textValue.slice(start, end).trim();
-      pushCandidate(segment, baseIndex + index);
+      pushSegmentCandidates(segment, baseIndex + index);
     });
   };
 
