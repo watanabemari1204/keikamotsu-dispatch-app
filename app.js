@@ -1806,14 +1806,17 @@ function renderScanCapacity() {
   $("#scanTimeGuide").textContent = `撮影目安: 約${seconds}秒。おすすめは${clipSeconds}秒 x ${clips}本。荷札は0.5秒ほど止めて映すと安定します。`;
 }
 
-function doubleScanSimulation(rawReads = []) {
+function doubleScanSimulation(rawReads = [], scanPasses = 2) {
   const total = rawReads.length || scanTargetCount();
   const reads = rawReads.length ? rawReads : generatedParcelReads(total);
   const speed = Number($("#scanSpeed")?.value || 2);
   const firstSeconds = Math.ceil(total / speed);
   const morningReads = reads.filter((read) => read.wave <= 3);
   const confirmSeconds = Math.ceil(morningReads.length / (speed * 1.15));
+  const thirdCheckItems = Math.max(35, Math.round(total * 0.34));
+  const thirdSeconds = scanPasses >= 3 ? Math.ceil(thirdCheckItems / speed) : 0;
   const totalSeconds = firstSeconds + confirmSeconds;
+  const finalTotalSeconds = totalSeconds + thirdSeconds;
   const firstMissed = Math.max(1, Math.round(total * 0.055));
   const firstDuplicate = Math.max(1, Math.round(total * 0.018));
   const firstWrongWave = Math.max(1, Math.round(total * 0.024));
@@ -1822,25 +1825,35 @@ function doubleScanSimulation(rawReads = []) {
   const finalDuplicate = Math.max(0, Math.round(total * 0.003));
   const finalWrongWave = Math.max(0, Math.round(total * 0.004));
   const finalWrongColor = Math.max(0, Math.round(morningReads.length * 0.008));
+  const thirdMissed = scanPasses >= 3 ? Math.max(0, Math.round(total * 0.002)) : finalMissed;
+  const thirdDuplicate = scanPasses >= 3 ? 0 : finalDuplicate;
+  const thirdWrongWave = scanPasses >= 3 ? Math.max(0, Math.round(total * 0.0015)) : finalWrongWave;
+  const thirdWrongColor = scanPasses >= 3 ? Math.max(0, Math.round(morningReads.length * 0.003)) : finalWrongColor;
   const firstAccuracy = Math.round((1 - (firstMissed + firstDuplicate + firstWrongWave) / total) * 1000) / 10;
   const finalAccuracy = Math.round((1 - (finalMissed + finalDuplicate + finalWrongWave) / total) * 1000) / 10;
+  const thirdAccuracy = Math.round((1 - (thirdMissed + thirdDuplicate + thirdWrongWave) / total) * 1000) / 10;
   const oldLoad = Math.max(120, Number($("#oldLoadMinutes")?.value || 150));
   const currentAiLoad = Math.max(70, Number($("#aiLoadMinutes")?.value || 90));
   const doubleScanLoad = Math.max(78, currentAiLoad - Math.round(morningReads.length * 0.035) - 8);
+  const tripleScanLoad = scanPasses >= 3 ? Math.max(75, doubleScanLoad - 3) : doubleScanLoad;
   const manualSearchMinutes = Math.round(morningReads.length * 0.11);
   const doubleScanSearchMinutes = Math.round(morningReads.length * 0.025);
-  const savedFromOld = oldLoad - doubleScanLoad;
-  const savedFromCurrent = currentAiLoad - doubleScanLoad;
-  const returnGain = Math.max(8, Math.round(savedFromCurrent * 0.45 + (firstWrongWave - finalWrongWave) * 0.7));
+  const finalSearchMinutes = scanPasses >= 3 ? Math.max(5, doubleScanSearchMinutes - 3) : doubleScanSearchMinutes;
+  const finalLoad = scanPasses >= 3 ? tripleScanLoad : doubleScanLoad;
+  const savedFromOld = oldLoad - finalLoad;
+  const savedFromCurrent = currentAiLoad - finalLoad;
+  const returnGain = Math.max(8, Math.round(savedFromCurrent * 0.45 + (firstWrongWave - (scanPasses >= 3 ? thirdWrongWave : finalWrongWave)) * 0.7));
   const waveCounts = [1, 2, 3, 4].map((wave) => reads.filter((read) => read.wave === wave).length);
   const colorCounts = ["red", "yellow", "blue"].map((color) => morningReads.filter((read) => read.loadColor === color).length);
 
   return {
+    scanPasses,
     total,
     morningTotal: morningReads.length,
     firstSeconds,
     confirmSeconds,
-    totalSeconds,
+    thirdSeconds,
+    totalSeconds: finalTotalSeconds,
     firstMissed,
     firstDuplicate,
     firstWrongWave,
@@ -1849,13 +1862,18 @@ function doubleScanSimulation(rawReads = []) {
     finalDuplicate,
     finalWrongWave,
     finalWrongColor,
+    thirdMissed,
+    thirdDuplicate,
+    thirdWrongWave,
+    thirdWrongColor,
     firstAccuracy,
     finalAccuracy,
+    thirdAccuracy,
     oldLoad,
     currentAiLoad,
-    doubleScanLoad,
+    doubleScanLoad: finalLoad,
     manualSearchMinutes,
-    doubleScanSearchMinutes,
+    doubleScanSearchMinutes: finalSearchMinutes,
     savedFromOld,
     savedFromCurrent,
     returnGain,
@@ -1864,33 +1882,39 @@ function doubleScanSimulation(rawReads = []) {
   };
 }
 
-function renderDoubleScanSimulation(rawReads = []) {
+function renderDoubleScanSimulation(rawReads = [], scanPasses = 2) {
   const panel = $("#doubleScanPanel");
   if (!panel) return;
-  const sim = doubleScanSimulation(rawReads);
+  const sim = doubleScanSimulation(rawReads, scanPasses);
+  const accuracyText = scanPasses >= 3
+    ? `${sim.firstAccuracy}% → ${sim.finalAccuracy}% → ${sim.thirdAccuracy}%`
+    : `${sim.firstAccuracy}% → ${sim.finalAccuracy}%`;
+  const countText = (first, second, third) => scanPasses >= 3 ? `${first}→${second}→${third}` : `${first}→${second}`;
   panel.hidden = false;
   panel.innerHTML = `
     <div class="double-scan-head">
       <div>
-        <span class="section-kicker">Double Scan</span>
-        <strong>2回読取シミュレーション: ${sim.total}個</strong>
+        <span class="section-kicker">${scanPasses >= 3 ? "Triple Scan" : "Double Scan"}</span>
+        <strong>${scanPasses}回読取シミュレーション: ${sim.total}個</strong>
       </div>
-      <b>${sim.firstAccuracy}% → ${sim.finalAccuracy}%</b>
+      <b>${accuracyText}</b>
     </div>
     <div class="double-scan-flow">
       <span>1回目 全体読取 ${Math.ceil(sim.firstSeconds / 60)}分</span>
       <span>2回目 1〜3便確認 ${Math.ceil(sim.confirmSeconds / 60)}分</span>
+      ${scanPasses >= 3 ? `<span>3回目 怪しい荷物だけ ${Math.ceil(sim.thirdSeconds / 60)}分</span>` : ""}
       <span>合計 ${Math.ceil(sim.totalSeconds / 60)}分</span>
     </div>
     <div class="double-scan-grid">
-      <div><strong>${sim.firstMissed}→${sim.finalMissed}</strong><span>未読取</span></div>
-      <div><strong>${sim.firstDuplicate}→${sim.finalDuplicate}</strong><span>重複</span></div>
-      <div><strong>${sim.firstWrongWave}→${sim.finalWrongWave}</strong><span>便違い</span></div>
-      <div><strong>${sim.firstWrongColor}→${sim.finalWrongColor}</strong><span>赤黄青違い</span></div>
+      <div><strong>${countText(sim.firstMissed, sim.finalMissed, sim.thirdMissed)}</strong><span>未読取</span></div>
+      <div><strong>${countText(sim.firstDuplicate, sim.finalDuplicate, sim.thirdDuplicate)}</strong><span>重複</span></div>
+      <div><strong>${countText(sim.firstWrongWave, sim.finalWrongWave, sim.thirdWrongWave)}</strong><span>便違い</span></div>
+      <div><strong>${countText(sim.firstWrongColor, sim.finalWrongColor, sim.thirdWrongColor)}</strong><span>赤黄青違い</span></div>
     </div>
     <div class="double-scan-result">
       <strong>朝の仕訳・積み込み ${sim.oldLoad}分 → ${sim.doubleScanLoad}分想定</strong>
       <span>現行AI想定からさらに ${sim.savedFromCurrent}分短縮。手探し時間は ${sim.manualSearchMinutes}分 → ${sim.doubleScanSearchMinutes}分。3便後の勝島戻りは約${sim.returnGain}分前倒し見込み。</span>
+      ${scanPasses >= 3 ? "<span>3回目は全荷物ではなく、1回目と2回目で不一致・低信頼・住所ゆれが出た荷物だけを再確認します。</span>" : ""}
       <span>便分け: 1便${sim.waveCounts[0]}個 / 2便${sim.waveCounts[1]}個 / 3便${sim.waveCounts[2]}個 / 4便候補${sim.waveCounts[3]}個。1〜3便の積み色: 赤${sim.colorCounts[0]} / 黄${sim.colorCounts[1]} / 青${sim.colorCounts[2]}。</span>
     </div>
   `;
@@ -2028,6 +2052,23 @@ function runDoubleScanSimulation() {
     renderDoubleScanSimulation(rawReads);
   }
   $("#scanStatus").textContent = "2回読取シミュレーション完了。全体読取と便ごと確認で精度・時短を比較しました";
+}
+
+function runTripleScanSimulation() {
+  const rawReads = lastScanReads.length ? lastScanReads : generatedParcelReads(scanTargetCount());
+  const groups = lastScanGroups.length ? lastScanGroups : aggregateParcelReads(rawReads);
+  if (!lastScanReads.length) {
+    const total = rawReads.length;
+    const speed = Number($("#scanSpeed")?.value || 2);
+    const seconds = Math.ceil(total / speed);
+    renderVideoScanResults(
+      groups,
+      `${total}個を3回読取前提で仮シミュレーション。1回目で全体、2回目で1〜3便確認、3回目で不一致・低信頼の荷物だけを最終確認します。1回目の撮影目安は約${seconds}秒です。`,
+      rawReads
+    );
+  }
+  renderDoubleScanSimulation(rawReads, 3);
+  $("#scanStatus").textContent = "3回読取シミュレーション完了。3回目は怪しい荷物だけを再確認する想定です";
 }
 
 function bulkVideoScan() {
@@ -2295,6 +2336,7 @@ $("#captureParcel").addEventListener("click", captureParcel);
 $("#bulkVideoScan").addEventListener("click", bulkVideoScan);
 $("#bulk400Scan").addEventListener("click", bulk400Scan);
 $("#doubleScanSim").addEventListener("click", runDoubleScanSimulation);
+$("#tripleScanSim").addEventListener("click", runTripleScanSimulation);
 $("#scanTargetCount").addEventListener("input", renderScanCapacity);
 $("#scanSpeed").addEventListener("change", renderScanCapacity);
 $("#toggleAllScanPins").addEventListener("click", () => {
