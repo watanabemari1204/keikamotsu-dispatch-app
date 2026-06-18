@@ -1768,6 +1768,79 @@ video {
   font-weight: 850;
 }
 
+.ocr-read-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+  border: 1px solid #d6e1ea;
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: white;
+}
+
+.ocr-read-list-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.ocr-read-list-head span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+#ocrReadItems {
+  display: grid;
+  gap: 7px;
+  max-height: 260px;
+  overflow: auto;
+}
+
+#ocrReadItems article {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
+  gap: 8px;
+  border: 1px solid #e0e8ef;
+  border-radius: 8px;
+  padding: 8px;
+  background: #fbfdff;
+}
+
+#ocrReadItems article b {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border-radius: 50%;
+  background: #b98900;
+  color: white;
+}
+
+#ocrReadItems article.ok b {
+  background: #138a55;
+}
+
+#ocrReadItems article strong,
+#ocrReadItems article span,
+#ocrReadItems article small {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+#ocrReadItems article span {
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 850;
+}
+
+#ocrReadItems article small {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
 .scan-capacity {
   display: grid;
   gap: 10px;

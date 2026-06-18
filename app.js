@@ -76,6 +76,7 @@ let autopilotEnabled = false;
 let reminderTimer;
 let cameraStream;
 let ocrReadCount = 0;
+let ocrAttempts = [];
 const spokenReminderKeys = new Set();
 const sameDayLoadDeadline = "14:30";
 
@@ -2385,6 +2386,37 @@ function renderOcrProof({ ok = false, address = "", confidence = 0, raw = "", re
   $("#ocrProofRaw").textContent = raw ? raw.replace(/\s+/g, " ").slice(0, 220) : "-";
 }
 
+function addOcrAttempt({ ok = false, code = "", address = "", confidence = 0, raw = "", reason = "" } = {}) {
+  ocrAttempts.unshift({
+    id: Date.now(),
+    ok,
+    code,
+    address,
+    confidence: Math.round(confidence),
+    raw: raw ? raw.replace(/\s+/g, " ").slice(0, 120) : "",
+    reason
+  });
+  ocrAttempts = ocrAttempts.slice(0, 30);
+  renderOcrReadList();
+}
+
+function renderOcrReadList() {
+  const list = $("#ocrReadList");
+  const items = $("#ocrReadItems");
+  if (!list || !items) return;
+  list.hidden = !ocrAttempts.length;
+  items.innerHTML = ocrAttempts.map((item, index) => `
+    <article class="${item.ok ? "ok" : "fail"}">
+      <b>${item.ok ? "○" : "△"}</b>
+      <div>
+        <strong>${index + 1}. ${item.ok ? item.code : "再読取"} / ${item.confidence}%</strong>
+        <span>${item.address || item.reason || "住所未検出"}</span>
+        <small>${item.raw || "OCR文字なし"}</small>
+      </div>
+    </article>
+  `).join("");
+}
+
 function canvasFromVideo(video) {
   const canvas = document.createElement("canvas");
   const width = video.videoWidth || video.clientWidth || 1280;
@@ -2427,6 +2459,7 @@ async function captureParcel() {
       updateScanCounter({ read: ocrReadCount, target: scanTargetCount(), confirmed: ocrReadCount, retry: 1, duplicate: 0 });
       $("#scanStatus").textContent = "住所を読めませんでした。画面の反射を避け、住所を大きく映して再読取してください";
       renderOcrProof({ ok: false, address: extracted.address, confidence, raw: rawText, reason: extracted.address ? "信頼度が低いです" : "住所形式が見つかりません" });
+      addOcrAttempt({ ok: false, code: extracted.code, address: extracted.address, confidence, raw: rawText, reason: extracted.address ? "信頼度が低いです" : "住所形式が見つかりません" });
       showScanFeedback("retry", "再読取");
       setScanProgress("住所未検出", 100);
       return;
@@ -2436,6 +2469,7 @@ async function captureParcel() {
     $("#scanStatus").textContent = `OCR読取OK: ${extracted.code} / ${extracted.address}`;
     $("#videoScanCount").textContent = `${ocrReadCount}件OCR読取`;
     renderOcrProof({ ok: true, address: extracted.address, confidence, raw: rawText });
+    addOcrAttempt({ ok: true, code: extracted.code, address: extracted.address, confidence, raw: rawText });
     showScanFeedback("ok", `${ocrReadCount}件目OK`);
     setScanProgress("OCR読取OK", 100);
   } catch (error) {
