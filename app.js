@@ -1566,7 +1566,7 @@ function renderRawScanLog(rawReads = []) {
       <span class="raw-color blue">青 ${colorCounts.blue || 0}件</span>
     </div>
     <div class="raw-scan-list">
-      ${sample.map((item) => `<span><b class="read-color ${item.loadColor}">${loadColorLabel(item.loadColor)}</b>${item.code} ${item.address} / ${item.wave}便 / ${item.deadline} / ${loadColorName(item.loadColor)}</span>`).join("")}
+      ${sample.map((item) => `<span><b class="read-color ${item.loadColor}">${loadColorLabel(item.loadColor)}</b>${item.wave}便-${item.routeOrder || "-"}番 ${item.code} ${item.address} / ${item.deadline} / ${loadColorName(item.loadColor)}</span>`).join("")}
     </div>
   `;
 }
@@ -1626,8 +1626,74 @@ function filteredScanGroups(groups = []) {
 
 function currentScanWaveReads(rawReads = []) {
   const reads = filteredScanReads(rawReads);
-  if (reads.length || scanMapWaveFilter !== "all") return reads;
-  return rawReads.filter((read) => read.wave === 1);
+  const fallback = reads.length || scanMapWaveFilter !== "all" ? reads : rawReads.filter((read) => read.wave === 1);
+  return [...fallback].sort((a, b) => (a.wave - b.wave) || ((a.routeOrder || 9999) - (b.routeOrder || 9999)) || a.code.localeCompare(b.code));
+}
+
+function distanceBetweenPoints(a, b) {
+  const lat = (a.lat || 0) - (b.lat || 0);
+  const lng = (a.lng || 0) - (b.lng || 0);
+  return Math.sqrt(lat * lat + lng * lng);
+}
+
+function nearestRouteOrder(reads = []) {
+  const remaining = [...reads];
+  const ordered = [];
+  let current = depot;
+  while (remaining.length) {
+    let bestIndex = 0;
+    let bestDistance = Infinity;
+    remaining.forEach((read, index) => {
+      const distance = distanceBetweenPoints(current, read);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        bestIndex = index;
+      }
+    });
+    const next = remaining.splice(bestIndex, 1)[0];
+    ordered.push(next);
+    current = next;
+  }
+  return ordered;
+}
+
+function applyRouteOrderAndColors(reads = []) {
+  const byWave = new Map();
+  reads.forEach((read) => {
+    if (!byWave.has(read.wave)) byWave.set(read.wave, []);
+    byWave.get(read.wave).push(read);
+  });
+
+  const result = [];
+  [...byWave.entries()].sort((a, b) => a[0] - b[0]).forEach(([wave, waveReads]) => {
+    const ordered = nearestRouteOrder(waveReads);
+    ordered.forEach((read, index) => {
+      result.push({
+        ...read,
+        routeOrder: index + 1,
+        loadColor: classifyLoadColor({ parcels: ordered.length }, index, ordered.length),
+        routeColorReason: `${wave}便ナビ順 ${index + 1}/${ordered.length}`
+      });
+    });
+  });
+  return result.sort((a, b) => (a.wave - b.wave) || (a.routeOrder - b.routeOrder));
+}
+
+function scanNavReadsForCurrentView(rawReads = []) {
+  const reads = currentScanWaveReads(rawReads);
+  if (scanMapWaveFilter === "all") {
+    return [1, 2, 3, 4].flatMap((wave) => reads.filter((read) => read.wave === wave).slice(0, 2));
+  }
+  const ordered = [...reads].sort((a, b) => (a.routeOrder || 9999) - (b.routeOrder || 9999));
+  const maxWaypoints = 8;
+  if (ordered.length <= maxWaypoints) return ordered;
+  const step = Math.max(1, Math.floor(ordered.length / maxWaypoints));
+  const sampled = [];
+  for (let index = 0; index < ordered.length && sampled.length < maxWaypoints; index += step) {
+    sampled.push(ordered[index]);
+  }
+  if (!sampled.includes(ordered[ordered.length - 1])) sampled[sampled.length - 1] = ordered[ordered.length - 1];
+  return sampled;
 }
 
 function renderScanWaveDashboard(groups = [], rawReads = []) {
@@ -1642,18 +1708,20 @@ function renderScanWaveDashboard(groups = [], rawReads = []) {
   const selectedGroups = filteredScanGroups(groups);
   const nextRead = selectedReads[0];
   const totalParcels = selectedReads.length || selectedGroups.reduce((sum, group) => sum + group.parcels, 0);
+  const navStops = scanNavReadsForCurrentView(rawReads);
   const waveLabel = scanWaveName(scanMapWaveFilter);
   const waveCounts = [1, 2, 3, 4].map((wave) => ({
     wave,
     count: rawReads.filter((read) => read.wave === wave).length || groups.filter((group) => group.wave === wave).reduce((sum, group) => sum + group.parcels, 0)
   }));
   const nextText = nextRead
-    ? `${nextRead.code} ${nextRead.address} / ${loadColorLabel(nextRead.loadColor)} ${loadColorName(nextRead.loadColor)}`
+    ? `${nextRead.routeOrder || 1}番 ${nextRead.code} ${nextRead.address} / ${loadColorLabel(nextRead.loadColor)} ${loadColorName(nextRead.loadColor)}`
     : "束単位のナビ候補を表示中";
   dashboard.innerHTML = `
     <div>
       <strong>${waveLabel}を表示中: ${totalParcels}個</strong>
       <span>次: ${nextText}</span>
+      <span>地図は個別ピン${selectedReads.length}件。ナビはGoogle Maps制限に合わせて代表経由地${navStops.length}点に圧縮します。</span>
     </div>
     <div class="scan-wave-counts">
       ${waveCounts.map((item) => `<span style="--wave-color:${scanWaveColor(item.wave)}">${item.wave}便 ${item.count}個</span>`).join("")}
@@ -1667,18 +1735,20 @@ function updateScanWaveButtons() {
   });
 }
 
-function scanRouteStopsForNavigation(groups = []) {
+function scanRouteStopsForNavigation(groups = [], rawReads = []) {
+  const navReads = scanNavReadsForCurrentView(rawReads);
   const targetGroups = filteredScanGroups(groups);
-  if (!targetGroups.length) return [];
+  const targetStops = navReads.length ? navReads : targetGroups;
+  if (!targetStops.length) return [];
   return [
     { name: depot.name, address: depot.address, lat: depot.lat, lng: depot.lng, isDepot: true },
-    ...targetGroups,
+    ...targetStops,
     { name: depot.name, address: depot.address, lat: depot.lat, lng: depot.lng, isDepot: true }
   ];
 }
 
 function googleMapsUrlForScanWave() {
-  const routeStops = scanRouteStopsForNavigation(lastScanGroups);
+  const routeStops = scanRouteStopsForNavigation(lastScanGroups, lastScanReads);
   if (!routeStops.length) return "";
   const origin = encodeURIComponent(routePointForMaps(routeStops[0]));
   const destination = encodeURIComponent(routePointForMaps(routeStops[routeStops.length - 1]));
@@ -1700,14 +1770,15 @@ function renderScanDetailMap(groups = [], rawReads = []) {
   if (!canvas) return;
   const mapGroups = filteredScanGroups(groups);
   const mapReads = filteredScanReads(rawReads);
+  const navReads = scanNavReadsForCurrentView(rawReads);
   const routeStops = [
     { name: depot.name, area: "勝島", lat: depot.lat, lng: depot.lng, isDepot: true },
-    ...mapGroups,
+    ...(navReads.length ? navReads : mapGroups),
     { name: depot.name, area: "勝島", lat: depot.lat, lng: depot.lng, isDepot: true }
   ];
   const visibleReads = scanMapShowAllPins ? mapReads : mapReads.slice(0, 80);
   $("#scanMapStatus").textContent = rawReads.length
-    ? `${scanWaveName(scanMapWaveFilter)} / 個別地点 ${mapReads.length}件 / 地図表示 ${visibleReads.length}点 / 集約 ${mapGroups.length}束${scanMapShowAllPins ? " / 全ピン表示中" : " / 軽量表示"}`
+    ? `${scanWaveName(scanMapWaveFilter)} / 個別地点 ${mapReads.length}件 / 地図表示 ${visibleReads.length}点 / ナビ代表 ${navReads.length || mapGroups.length}点${scanMapShowAllPins ? " / 全ピン表示中" : " / 軽量表示"}`
     : `${scanWaveName(scanMapWaveFilter)} / 集約 ${mapGroups.length}束を表示`;
   $("#toggleAllScanPins").textContent = scanMapShowAllPins ? "軽量表示" : "全ピン表示";
   updateScanWaveButtons();
@@ -1746,7 +1817,7 @@ function renderScanDetailMap(groups = [], rawReads = []) {
       weight: 1,
       fillColor: loadColorHex(read.loadColor),
       fillOpacity: scanMapWaveFilter === "all" ? 0.58 : 0.82
-    }).bindPopup(`${read.code}<br>${read.address}<br>${read.wave}便 / ${read.deadline}<br>${loadColorLabel(read.loadColor)} ${loadColorName(read.loadColor)}`).addTo(scanMapLayer);
+    }).bindPopup(`${read.code}<br>${read.address}<br>${read.wave}便 / ナビ順 ${read.routeOrder || "-"}<br>${read.deadline}<br>${loadColorLabel(read.loadColor)} ${loadColorName(read.loadColor)}`).addTo(scanMapLayer);
   });
 
   L.polyline(routeStops.map((stop) => [stop.lat, stop.lng]), {
@@ -1762,7 +1833,7 @@ function renderScanDetailMap(groups = [], rawReads = []) {
       weight: 3,
       fillColor: stop.isDepot ? "#172532" : scanWaveColor(stop.wave),
       fillOpacity: 1
-    }).bindPopup(stop.isDepot ? "勝島集積所" : `${stop.address}<br>${stop.parcels}個 / ${stop.wave}便 / ${stop.deadline}`).addTo(scanMapLayer);
+    }).bindPopup(stop.isDepot ? "勝島集積所" : `${stop.code ? `${stop.code}<br>` : ""}${stop.address}<br>${stop.parcels ? `${stop.parcels}個 / ` : ""}${stop.wave}便 / ナビ代表${stop.routeOrder ? ` / 順${stop.routeOrder}` : ""}<br>${stop.deadline}`).addTo(scanMapLayer);
     L.marker([stop.lat, stop.lng], {
       icon: L.divIcon({
         className: "route-number-label",
@@ -1971,7 +2042,7 @@ function generatedParcelReads(total) {
       });
     }
   });
-  return reads;
+  return applyRouteOrderAndColors(reads);
 }
 
 function aggregateParcelReads(reads) {
@@ -2018,7 +2089,7 @@ function asklPagesTestReads() {
     if (areaA !== areaB) return areaA.localeCompare(areaB, "ja");
     return a.code.localeCompare(b.code);
   });
-  return sorted.map((record, index) => {
+  const reads = sorted.map((record, index) => {
     const info = asklAreaInfo(record.address);
     const sameWaveIndex = sorted.slice(0, index).filter((item) => asklAreaInfo(item.address).wave === info.wave).length;
     const sameWaveTotal = sorted.filter((item) => asklAreaInfo(item.address).wave === info.wave).length;
@@ -2037,6 +2108,7 @@ function asklPagesTestReads() {
       customer: record.name
     };
   });
+  return applyRouteOrderAndColors(reads);
 }
 
 function runAsklPagesTest() {
