@@ -706,7 +706,8 @@ button {
 }
 
 .route-pin-wrap,
-.route-number-label {
+.route-number-label,
+.read-order-label {
   background: transparent;
   border: 0;
 }
@@ -720,6 +721,20 @@ button {
   font-size: 12px;
   font-weight: 900;
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.55);
+}
+
+.read-order-label span {
+  display: grid;
+  width: 21px;
+  height: 21px;
+  place-items: center;
+  border: 2px solid white;
+  border-radius: 50%;
+  background: var(--pin-color, #172532);
+  color: white;
+  font-size: 10px;
+  font-weight: 950;
+  box-shadow: 0 4px 10px rgba(23, 32, 42, 0.32);
 }
 
 .leaflet-route-pin {
@@ -1173,6 +1188,43 @@ button {
   color: var(--muted);
   font-size: 13px;
   font-weight: 800;
+  line-height: 1.45;
+}
+
+.scan-qa-panel {
+  display: grid;
+  gap: 5px;
+  margin-bottom: 10px;
+  border: 1px solid #dbe4ec;
+  border-left: 4px solid #b98900;
+  border-radius: 8px;
+  padding: 10px;
+  background: #fffdf7;
+}
+
+.scan-qa-panel.ok {
+  border-left-color: #138a55;
+  background: #f3fbf7;
+}
+
+.scan-qa-panel.warn {
+  border-left-color: #d83b3b;
+  background: #fff7f7;
+}
+
+.scan-qa-panel strong,
+.scan-qa-panel span {
+  display: block;
+}
+
+.scan-qa-panel strong {
+  color: var(--ink);
+}
+
+.scan-qa-panel span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 850;
   line-height: 1.45;
 }
 

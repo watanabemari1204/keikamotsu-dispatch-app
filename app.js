@@ -1862,6 +1862,31 @@ function renderScanWaveDashboard(groups = [], rawReads = []) {
   `;
 }
 
+function renderScanQaPanel(rawReads = [], visibleReads = [], navReads = []) {
+  const panel = $("#scanQaPanel");
+  if (!panel) return;
+  if (!rawReads.length) {
+    panel.innerHTML = "<strong>読取チェック待機中</strong>";
+    panel.classList.remove("ok", "warn");
+    return;
+  }
+  const listCount = document.querySelectorAll("#ocrReadItems article").length;
+  const colorCounts = ["red", "yellow", "blue"].map((color) => rawReads.filter((read) => read.loadColor === color).length);
+  const waveCounts = [1, 2, 3, 4].map((wave) => rawReads.filter((read) => read.wave === wave).length);
+  const routeOrderOk = [1, 2, 3, 4].every((wave) => {
+    const orders = rawReads.filter((read) => read.wave === wave).map((read) => read.routeOrder).sort((a, b) => a - b);
+    return orders.every((order, index) => order === index + 1);
+  });
+  const ok = listCount === rawReads.length && visibleReads.length === rawReads.length && routeOrderOk;
+  panel.classList.toggle("ok", ok);
+  panel.classList.toggle("warn", !ok);
+  panel.innerHTML = `
+    <strong>${ok ? "読取・地図・順番 OK" : "確認が必要"}</strong>
+    <span>読取${rawReads.length}件 / リスト${listCount}件 / 地図ピン${visibleReads.length}点 / ナビ代表${navReads.length}点</span>
+    <span>便: 1便${waveCounts[0]} / 2便${waveCounts[1]} / 3便${waveCounts[2]} / 4便${waveCounts[3]} ・ 色: 赤${colorCounts[0]} 黄${colorCounts[1]} 青${colorCounts[2]}</span>
+  `;
+}
+
 function updateScanWaveButtons() {
   document.querySelectorAll("[data-scan-wave]").forEach((button) => {
     button.classList.toggle("active", button.dataset.scanWave === scanMapWaveFilter);
@@ -1916,6 +1941,7 @@ function renderScanDetailMap(groups = [], rawReads = []) {
   $("#toggleAllScanPins").textContent = scanMapShowAllPins ? "軽量表示" : "全ピン表示";
   updateScanWaveButtons();
   renderScanWaveDashboard(groups, rawReads);
+  renderScanQaPanel(rawReads, visibleReads, navReads);
   renderDeliveryOperation(rawReads);
 
   if (!window.L) {
@@ -1952,6 +1978,17 @@ function renderScanDetailMap(groups = [], rawReads = []) {
       fillColor: loadColorHex(read.loadColor),
       fillOpacity: scanMapWaveFilter === "all" ? 0.58 : 0.82
     }).bindPopup(`${read.code}<br>${read.address}<br>${read.wave}便 / ナビ順 ${read.routeOrder || "-"}<br>${read.deadline}<br>${loadColorLabel(read.loadColor)} ${loadColorName(read.loadColor)}`).addTo(scanMapLayer);
+    if (read.routeOrder && (scanMapWaveFilter !== "all" || visibleReads.length <= 80)) {
+      L.marker([read.lat, read.lng], {
+        icon: L.divIcon({
+          className: "read-order-label",
+          html: `<span style="--pin-color:${loadColorHex(read.loadColor)}">${read.routeOrder}</span>`,
+          iconSize: [22, 22],
+          iconAnchor: [11, 11]
+        }),
+        interactive: false
+      }).addTo(scanMapLayer);
+    }
   });
 
   L.polyline(routeStops.map((stop) => [stop.lat, stop.lng]), {
@@ -1960,7 +1997,10 @@ function renderScanDetailMap(groups = [], rawReads = []) {
     opacity: 0.72
   }).addTo(scanMapLayer);
 
-  routeStops.forEach((stop, index) => {
+  let deliveryLabelIndex = 0;
+  routeStops.forEach((stop) => {
+    const label = stop.isDepot ? "勝" : String(stop.routeOrder || (deliveryLabelIndex += 1));
+    if (!stop.isDepot && stop.routeOrder) deliveryLabelIndex = Math.max(deliveryLabelIndex, stop.routeOrder);
     L.circleMarker([stop.lat, stop.lng], {
       radius: stop.isDepot ? 9 : 8,
       color: "#ffffff",
@@ -1971,7 +2011,7 @@ function renderScanDetailMap(groups = [], rawReads = []) {
     L.marker([stop.lat, stop.lng], {
       icon: L.divIcon({
         className: "route-number-label",
-        html: `<span>${index + 1}</span>`,
+        html: `<span>${label}</span>`,
         iconSize: [28, 28],
         iconAnchor: [14, 14]
       }),
@@ -2967,6 +3007,11 @@ document.querySelectorAll(".nav-item").forEach((button) => {
 
 window.googleMapsRouteUrl = googleMapsRouteUrl;
 window.googleMapsScanRouteUrl = googleMapsUrlForScanWave;
+window.keikamotsuDiagnostics = {
+  extractDeliveryRowsFromText,
+  readsFromDeliveryCandidates,
+  aggregateParcelReads
+};
 
 document.querySelectorAll("[data-mobile-panel]").forEach((button) => {
   button.addEventListener("click", () => {
