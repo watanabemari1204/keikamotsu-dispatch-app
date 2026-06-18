@@ -1916,6 +1916,43 @@ function setScanProgress(label, percent) {
   progress.querySelector("i").style.width = `${percent}%`;
 }
 
+function updateScanCounter({ read = 0, target = scanTargetCount(), confirmed = 0, retry = 0, duplicate = 0 } = {}) {
+  const counter = $("#scanCounter");
+  if (!counter) return;
+  counter.querySelector("strong").textContent = `読取 ${read} / ${target}件`;
+  counter.querySelector("span").textContent = `確定 ${confirmed}件 / 再読取 ${retry}件 / 重複 ${duplicate}件`;
+}
+
+function playScanTone(type = "ok") {
+  try {
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContext) return;
+    const context = new AudioContext();
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
+    oscillator.type = "sine";
+    oscillator.frequency.value = type === "ok" ? 880 : type === "retry" ? 520 : 220;
+    gain.gain.value = 0.045;
+    oscillator.connect(gain);
+    gain.connect(context.destination);
+    oscillator.start();
+    oscillator.stop(context.currentTime + 0.11);
+  } catch (error) {
+    // Audio feedback is optional; ignore blocked autoplay/audio contexts.
+  }
+}
+
+function showScanFeedback(type = "ok", text = "読取OK") {
+  const feedback = $("#scanFeedback");
+  if (!feedback) return;
+  const mark = type === "ok" ? "○" : type === "retry" ? "△" : "×";
+  feedback.className = `scan-feedback ${type}`;
+  feedback.querySelector("b").textContent = mark;
+  feedback.querySelector("span").textContent = text;
+  playScanTone(type);
+  if (navigator.vibrate) navigator.vibrate(type === "ok" ? 40 : [40, 30, 40]);
+}
+
 function scanTargetCount() {
   const input = $("#scanTargetCount");
   const value = Math.min(400, Math.max(1, Number(input?.value || 400)));
@@ -2171,9 +2208,12 @@ function runAsklPagesTest() {
   const rawReads = asklPagesTestReads();
   if (!rawReads.length) {
     $("#scanStatus").textContent = "ASKL Pagesテストデータを読み込めませんでした";
+    updateScanCounter({ read: 0, target: scanTargetCount(), confirmed: 0, retry: scanTargetCount(), duplicate: 0 });
+    showScanFeedback("fail", "読取データなし");
     return;
   }
   const groups = aggregateParcelReads(rawReads);
+  const sim = doubleScanSimulation(rawReads, 3);
   lastScanGroups = groups;
   lastScanReads = rawReads;
   scanMapShowAllPins = true;
@@ -2182,6 +2222,8 @@ function runAsklPagesTest() {
   $("#fourRuns")?.classList.add("active");
   $("#threeRuns")?.classList.remove("active");
   setScanProgress("ASKL Pages 400件を住所読取", 100);
+  updateScanCounter({ read: rawReads.length, target: rawReads.length, confirmed: rawReads.length - sim.thirdMissed - sim.thirdWrongWave, retry: sim.thirdMissed + sim.thirdWrongWave + sim.thirdWrongColor, duplicate: sim.thirdDuplicate });
+  showScanFeedback("ok", `400件読取OK`);
   const counts = [1, 2, 3, 4].map((wave) => rawReads.filter((read) => read.wave === wave).length);
   renderVideoScanResults(
     groups,
@@ -2200,11 +2242,14 @@ function bulk400Scan() {
   const clips = Math.max(1, Math.ceil(seconds / 60));
   const rawReads = generatedParcelReads(total);
   const groups = aggregateParcelReads(rawReads);
+  const sim = doubleScanSimulation(rawReads, 2);
   const unitPrice = getUnitPrice();
   runMode = 4;
   $("#fourRuns")?.classList.add("active");
   $("#threeRuns")?.classList.remove("active");
   setScanProgress(`${total}個を連続読取中`, 35);
+  updateScanCounter({ read: Math.round(total * 0.35), target: total, confirmed: Math.round(total * 0.28), retry: Math.round(total * 0.07), duplicate: 0 });
+  showScanFeedback("retry", `${Math.round(total * 0.35)}件読取中`);
   $("#scanStatus").textContent = `${total}個モード: ${clips}本に分けて読み取り、重複を除去しています`;
   const scannedStops = groups.map((item, index) => ({
     id: Date.now() + index,
@@ -2228,6 +2273,8 @@ function bulk400Scan() {
   setScanProgress("400個対応の便分け・積み順へ反映", 100);
   const routeText = `${rawReads.length}個の仮住所を個別読取し、${groups.length}束に集約。撮影目安は約${seconds}秒、${Math.ceil(seconds / clips)}秒 x ${clips}本。三田一丁目・芝三丁目周辺を1〜3便固定配送と4便当日配送候補へ振り分けました。`;
   renderVideoScanResults(groups, routeText, rawReads);
+  updateScanCounter({ read: rawReads.length, target: rawReads.length, confirmed: rawReads.length - sim.finalMissed - sim.finalWrongWave, retry: sim.finalMissed + sim.finalWrongWave + sim.finalWrongColor, duplicate: sim.finalDuplicate });
+  showScanFeedback("ok", `${rawReads.length}件読取OK`);
   $("#videoScanCount").textContent = `${total}個読取`;
   $("#scanStatus").textContent = "連続読取完了。束単位で便分け・積み順・ルートに反映しました";
 }
@@ -2247,6 +2294,9 @@ function runDoubleScanSimulation() {
   } else {
     renderDoubleScanSimulation(rawReads);
   }
+  const sim = doubleScanSimulation(rawReads, 2);
+  updateScanCounter({ read: rawReads.length, target: rawReads.length, confirmed: rawReads.length - sim.finalMissed - sim.finalWrongWave, retry: sim.finalMissed + sim.finalWrongWave + sim.finalWrongColor, duplicate: sim.finalDuplicate });
+  showScanFeedback("ok", "2回読取OK");
   $("#scanStatus").textContent = "2回読取シミュレーション完了。全体読取と便ごと確認で精度・時短を比較しました";
 }
 
@@ -2264,44 +2314,38 @@ function runTripleScanSimulation() {
     );
   }
   renderDoubleScanSimulation(rawReads, 3);
+  const sim = doubleScanSimulation(rawReads, 3);
+  updateScanCounter({ read: rawReads.length, target: rawReads.length, confirmed: rawReads.length - sim.thirdMissed - sim.thirdWrongWave, retry: sim.thirdMissed + sim.thirdWrongWave + sim.thirdWrongColor, duplicate: sim.thirdDuplicate });
+  showScanFeedback("ok", "3回読取OK");
   $("#scanStatus").textContent = "3回読取シミュレーション完了。3回目は怪しい荷物だけを再確認する想定です";
 }
 
 function bulkVideoScan() {
-  setScanProgress("映像から荷札を読み取り中", 28);
-  $("#scanStatus").textContent = "映像内の住所・個数・締切を解析中";
-  const unitPrice = getUnitPrice();
-  const plan = scannedRoutePlan(demoVideoScanParcels);
-  setScanProgress("住所と個数を抽出", 62);
-  const scannedStops = plan.sorted.map((item, index) => ({
-    id: Date.now() + index,
-    wave: 3,
-    parcels: item.parcels,
-    name: item.address,
-    area: item.area,
-    deadline: item.deadline,
-    distance: 0.8 + index * 0.2,
-    fee: item.parcels * unitPrice,
-    weight: Math.round(item.parcels * 0.55),
-    tags: ["映像読取", "最終便", `${item.parcels}個`],
-    x: item.x,
-    y: item.y
-  }));
-
-  orderedStops = [
-    ...orderedStops.filter((stop) => !stop.tags?.includes("映像読取")),
-    ...scannedStops
-  ];
-  $("#timeSlot").value = runMode === 4 ? "17" : "15";
-  optimizeStops();
-  setScanProgress("配送順とナビ候補へ反映", 88);
-
-  const advice = routeAdvice();
-  const routeText = `映像から${scannedStops.length}か所・${plan.totalParcels}個を読取。4便当日配送または最終便の近場枠へ割当し、${advice.recommendation}でナビ候補を更新しました。`;
-  renderVideoScanResults(demoVideoScanParcels, routeText);
-  $("#scanStatus").textContent = "映像一括読取完了。下の住所リストとルート反映を確認できます";
-  setScanProgress("読取完了・ルート反映済み", 100);
-  setTimeout(renderAll, 220);
+  setScanProgress("動画OCR診断中", 45);
+  updateScanCounter({ read: 0, target: scanTargetCount(), confirmed: 0, retry: scanTargetCount(), duplicate: 0 });
+  showScanFeedback("fail", "動画OCR未接続");
+  $("#scanStatus").textContent = "このプロトタイプは動画OCR API未接続です。実荷札の連続読取はまだ確定判定できません";
+  $("#videoScanCount").textContent = "動画OCR未接続";
+  $("#videoRouteSummary").textContent = "現時点の動画ボタンは本物のOCR読取ではありません。400件の実データ検証は ASKL Pages 400件テストで行い、本番化では動画フレーム抽出、OCR、住所正規化、重複判定、低信頼再読取を接続します。";
+  const panel = $("#doubleScanPanel");
+  if (panel) {
+    panel.hidden = false;
+    panel.innerHTML = `
+      <div class="double-scan-head">
+        <div>
+          <span class="section-kicker">OCR Check</span>
+          <strong>動画OCRは本番API未接続</strong>
+        </div>
+        <b>要接続</b>
+      </div>
+      <div class="double-scan-result">
+        <strong>今の動画ボタンだけでは、400件を正しく読めた判定はできません</strong>
+        <span>必要な処理: 動画フレーム抽出、OCR、ASKL番号照合、住所正規化、重複除去、低信頼だけ2回目/3回目の再読取。</span>
+        <span>この画面で正しくテストする場合は、ASKL Pages 400件テストを押してください。抽出済み400件で地図・車ナビ・徒歩順・赤黄青まで検証します。</span>
+      </div>
+    `;
+  }
+  setScanProgress("動画OCRは未接続・ASKLテスト推奨", 100);
 }
 
 function captureParcel() {

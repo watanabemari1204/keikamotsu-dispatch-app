@@ -16,7 +16,7 @@
       integrity="sha256-p4NxAoJBhIINfQvQbM+TgGyEoYOY0O5pYf67R7sQ4hA="
       crossorigin=""
     />
-    <link rel="stylesheet" href="./styles.css?v=carwalk47" />
+    <link rel="stylesheet" href="./styles.css?v=scanok50" />
   </head>
   <body>
     <div class="app-shell">
@@ -359,12 +359,20 @@
               </div>
               <div class="scan-actions">
                 <button class="secondary-button" id="captureParcel" type="button">読み取り</button>
-                <button class="secondary-button" id="bulkVideoScan" type="button">映像で一括読取してルート反映</button>
+                <button class="secondary-button" id="bulkVideoScan" type="button">動画OCR診断</button>
                 <button class="ghost-button" id="demoScan" type="button">デモ読取</button>
               </div>
               <div class="scan-progress" id="scanProgress">
                 <span>待機中</span>
                 <div><i style="width: 0%"></i></div>
+              </div>
+              <div class="scan-counter" id="scanCounter">
+                <strong>読取 0 / 400件</strong>
+                <span>確定 0件 / 再読取 0件 / 重複 0件</span>
+              </div>
+              <div class="scan-feedback" id="scanFeedback" aria-live="polite">
+                <b>○</b>
+                <span>読取待機中</span>
               </div>
               <div class="scan-capacity">
                 <strong id="scanCapacityTitle">最大400個まで連続読取</strong>
@@ -439,7 +447,7 @@
                 カメラで荷札を流すと、住所・個数・締切を読み取り、三田一丁目/芝三丁目/勝島帰庫の条件でルート案を作ります。
               </div>
               <div class="ocr-note">
-                現在はブラウザ内プロトタイプのため、実OCR API未接続時はサンプル荷札で一括読取の流れを再現します。本番では荷札OCR/APIに接続します。
+                動画OCRは本番API接続前の診断モードです。現時点で確実に400件を読ませるテストは、ASKL Pages 400件テストを使います。
               </div>
               <div class="scan-map-panel">
                 <div class="scan-map-head">
@@ -597,8 +605,8 @@
       integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
       crossorigin=""
     ></script>
-    <script src="./askl-test-data.js?v=carwalk47"></script>
-    <script src="./app.js?v=carwalk47"></script>
+    <script src="./askl-test-data.js?v=scanok50"></script>
+    <script src="./app.js?v=scanok50"></script>
     <script>
       if ("serviceWorker" in navigator && location.protocol !== "file:") {
         window.addEventListener("load", () => {
