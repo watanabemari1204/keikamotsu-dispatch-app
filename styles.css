@@ -1864,6 +1864,19 @@ video {
   font-size: 14px;
 }
 
+.paste-address-panel span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.paste-address-panel.priority {
+  margin-top: 0;
+  margin-bottom: 10px;
+  border-color: rgba(15, 139, 141, 0.32);
+  background: #f3fbfa;
+}
+
 .paste-address-panel textarea {
   min-height: 112px;
   margin: 0;

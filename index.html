@@ -16,7 +16,7 @@
       integrity="sha256-p4NxAoJBhIINfQvQbM+TgGyEoYOY0O5pYf67R7sQ4hA="
       crossorigin=""
     />
-    <link rel="stylesheet" href="./styles.css?v=addresspaste59" />
+    <link rel="stylesheet" href="./styles.css?v=addressfix60" />
   </head>
   <body>
     <div class="app-shell">
@@ -352,6 +352,12 @@
                 </div>
                 <button class="primary-button" id="startCamera" type="button">カメラ起動</button>
               </div>
+              <div class="paste-address-panel priority">
+                <strong>住所リスト貼り付け検証</strong>
+                <span>まずここに住所リストを貼ると、1行を1配送先として読取ります。</span>
+                <textarea id="addressPasteText" rows="7" placeholder="港区芝1丁目11-11 住友不動産芝ビル 2階 ABC商事株式会社"></textarea>
+                <button class="primary-button full" id="parseAddressPaste" type="button">貼り付け住所を読取</button>
+              </div>
               <div class="camera-frame">
                 <video id="cameraPreview" playsinline muted></video>
                 <div class="scan-reticle" aria-hidden="true"></div>
@@ -395,11 +401,6 @@
                   <span>住所の開始/終了を切り出して残します</span>
                 </div>
                 <div id="ocrReadItems"></div>
-              </div>
-              <div class="paste-address-panel">
-                <strong>住所リスト貼り付け検証</strong>
-                <textarea id="addressPasteText" rows="5" placeholder="港区芝1丁目11-11 住友不動産芝ビル 2階 ABC商事株式会社"></textarea>
-                <button class="primary-button full" id="parseAddressPaste" type="button">貼り付け住所を読取</button>
               </div>
               <div class="scan-capacity">
                 <strong id="scanCapacityTitle">最大400件まで住所リスト検証</strong>
@@ -633,8 +634,8 @@
       crossorigin=""
     ></script>
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-    <script src="./askl-test-data.js?v=addresspaste59"></script>
-    <script src="./app.js?v=addresspaste59"></script>
+    <script src="./askl-test-data.js?v=addressfix60"></script>
+    <script src="./app.js?v=addressfix60"></script>
     <script>
       if ("serviceWorker" in navigator && location.protocol !== "file:") {
         window.addEventListener("load", () => {

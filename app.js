@@ -84,6 +84,7 @@ let reminderTimer;
 let cameraStream;
 let ocrReadCount = 0;
 let ocrAttempts = [];
+let pasteParseTimer;
 const spokenReminderKeys = new Set();
 const sameDayLoadDeadline = "14:30";
 
@@ -1748,6 +1749,14 @@ function parseAddressPasteText() {
   applyDeliveryCandidateReads(candidates, "TEXT");
 }
 
+function scheduleAddressPasteParse() {
+  clearTimeout(pasteParseTimer);
+  pasteParseTimer = setTimeout(() => {
+    const text = $("#addressPasteText")?.value || "";
+    if (extractDeliveryRowsFromText(text).length >= 2) parseAddressPasteText();
+  }, 500);
+}
+
 function scanNavReadsForCurrentView(rawReads = []) {
   const reads = currentScanWaveReads(rawReads);
   if (scanMapWaveFilter === "all") {
@@ -2461,11 +2470,11 @@ function extractDeliveryRowsFromText(text = "") {
   const seen = new Set();
   const candidates = [];
   const linePattern = /((?:〒\d{3}-?\d{4}\s*)?(?:東京都)?港区(?:芝|三田)[一二三123１２３]丁目\d{1,2}-\d{1,2}(?:-\d{1,2})?)(.*)$/;
-  lines.forEach((line, lineIndex) => {
+  const pushCandidate = (line, lineIndex) => {
     const match = line.match(linePattern);
-    if (!match) return;
+    if (!match) return false;
     const deliveryLine = normalizeAddressText(`${match[1]}${match[2] || ""}`.trim());
-    if (seen.has(deliveryLine)) return;
+    if (seen.has(deliveryLine)) return true;
     seen.add(deliveryLine);
     candidates.push({
       code: `TXT-${String(candidates.length + 1).padStart(4, "0")}`,
@@ -2474,7 +2483,21 @@ function extractDeliveryRowsFromText(text = "") {
       raw: `行${lineIndex + 1}: ${deliveryLine}`,
       index: lineIndex
     });
-  });
+    return true;
+  };
+  lines.forEach(pushCandidate);
+  if (candidates.length <= 1) {
+    const flattened = normalizeDeliveryLine(text).replace(/\s+/g, " ");
+    const addressStart = /(?:〒\d{3}-?\d{4}\s*)?(?:東京都)?港区(?:芝|三田)[一二三123１２３]丁目\d{1,2}-\d{1,2}(?:-\d{1,2})?/g;
+    const starts = [];
+    let match;
+    while ((match = addressStart.exec(flattened)) !== null) starts.push(match.index);
+    starts.forEach((start, index) => {
+      const end = starts[index + 1] ?? flattened.length;
+      const segment = flattened.slice(start, end).trim();
+      pushCandidate(segment, index);
+    });
+  }
   return candidates;
 }
 
@@ -2891,7 +2914,9 @@ document.querySelectorAll(".nav-item").forEach((button) => {
     document.querySelectorAll(".nav-item").forEach((item) => item.classList.remove("active"));
     document.querySelectorAll(".panel").forEach((panel) => panel.classList.remove("active"));
     button.classList.add("active");
-    $(`#${button.dataset.panel}`).classList.add("active");
+    const activePanel = $(`#${button.dataset.panel}`);
+    activePanel.classList.add("active");
+    activePanel.scrollIntoView({ block: "start", behavior: "smooth" });
     if (button.dataset.panel === "dashboard") {
       setTimeout(() => {
         renderAll();
@@ -2972,6 +2997,7 @@ $("#photoReadButton").addEventListener("click", () => $("#photoReadInput")?.clic
 $("#photoReadInput").addEventListener("change", readPhotoFile);
 $("#clearWorkdayData").addEventListener("click", clearWorkdayReadData);
 $("#parseAddressPaste").addEventListener("click", parseAddressPasteText);
+$("#addressPasteText").addEventListener("input", scheduleAddressPasteParse);
 $("#bulkVideoScan")?.addEventListener("click", bulkVideoScan);
 $("#bulk400Scan").addEventListener("click", bulk400Scan);
 $("#asklPagesTest").addEventListener("click", runAsklPagesTest);
