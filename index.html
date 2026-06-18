@@ -16,7 +16,7 @@
       integrity="sha256-p4NxAoJBhIINfQvQbM+TgGyEoYOY0O5pYf67R7sQ4hA="
       crossorigin=""
     />
-    <link rel="stylesheet" href="./styles.css?v=readlist55" />
+    <link rel="stylesheet" href="./styles.css?v=photoread56" />
   </head>
   <body>
     <div class="app-shell">
@@ -359,9 +359,13 @@
               </div>
               <div class="scan-actions">
                 <button class="secondary-button" id="captureParcel" type="button">読取チェック</button>
+                <button class="secondary-button" id="photoReadButton" type="button">写真で読取</button>
                 <button class="secondary-button" id="bulkVideoScan" type="button">動画OCR診断</button>
+                <button class="ghost-button" id="clearWorkdayData" type="button">業務終了・消去</button>
                 <button class="ghost-button" id="demoScan" type="button">デモ読取</button>
+                <input id="photoReadInput" type="file" accept="image/*" capture="environment" hidden />
               </div>
+              <p class="scan-retention">読取データは端末保存しません。業務終了・消去で当日の読取リストと地図反映をクリアします。</p>
               <div class="scan-progress" id="scanProgress">
                 <span>待機中</span>
                 <div><i style="width: 0%"></i></div>
@@ -625,8 +629,8 @@
       crossorigin=""
     ></script>
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-    <script src="./askl-test-data.js?v=readlist55"></script>
-    <script src="./app.js?v=readlist55"></script>
+    <script src="./askl-test-data.js?v=photoread56"></script>
+    <script src="./app.js?v=photoread56"></script>
     <script>
       if ("serviceWorker" in navigator && location.protocol !== "file:") {
         window.addEventListener("load", () => {

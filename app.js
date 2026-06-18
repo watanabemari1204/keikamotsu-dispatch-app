@@ -2450,14 +2450,29 @@ function canvasFromVideo(video) {
   return canvas;
 }
 
-async function captureParcel() {
-  const video = $("#cameraPreview");
-  if (!video?.srcObject) {
-    $("#scanStatus").textContent = "先にカメラ起動を押してください";
-    addOcrAttempt({ ok: false, code: `OCR-${String(ocrAttempts.length + 1).padStart(4, "0")}`, confidence: 0, reason: "カメラ未起動", raw: "カメラ起動なし" });
-    showScanFeedback("fail", "カメラ未起動");
-    return;
-  }
+function canvasFromImageFile(file) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    const url = URL.createObjectURL(file);
+    image.onload = () => {
+      const maxSide = 1800;
+      const scale = Math.min(1, maxSide / Math.max(image.naturalWidth, image.naturalHeight));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+      canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+      canvas.getContext("2d", { willReadFrequently: true }).drawImage(image, 0, 0, canvas.width, canvas.height);
+      URL.revokeObjectURL(url);
+      resolve(canvas);
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("写真を読み込めませんでした"));
+    };
+    image.src = url;
+  });
+}
+
+async function runOcrOnCanvas(canvas, sourceLabel = "OCR") {
   if (!window.Tesseract) {
     $("#scanStatus").textContent = "文字読取の部品を読み込めません。再読込するか、ASKL Pages 400件テストで検証してください";
     addOcrAttempt({ ok: false, code: `OCR-${String(ocrAttempts.length + 1).padStart(4, "0")}`, confidence: 0, reason: "文字読取の部品を読み込めません", raw: "OCRライブラリなし" });
@@ -2465,9 +2480,8 @@ async function captureParcel() {
     return;
   }
   try {
-    setScanProgress("静止画OCRで住所読取中", 30);
+    setScanProgress(`${sourceLabel}で住所読取中`, 30);
     $("#scanStatus").textContent = "OCR読取中。住所を大きく明るく枠内に入れてください";
-    const canvas = canvasFromVideo(video);
     const result = await Tesseract.recognize(canvas, "jpn+eng", {
       logger: (message) => {
         if (message.status === "recognizing text") {
@@ -2502,6 +2516,56 @@ async function captureParcel() {
     showScanFeedback("fail", "OCR失敗");
     setScanProgress("OCR失敗", 100);
   }
+}
+
+async function captureParcel() {
+  const video = $("#cameraPreview");
+  if (!video?.srcObject) {
+    $("#scanStatus").textContent = "先にカメラ起動を押してください";
+    addOcrAttempt({ ok: false, code: `OCR-${String(ocrAttempts.length + 1).padStart(4, "0")}`, confidence: 0, reason: "カメラ未起動", raw: "カメラ起動なし" });
+    showScanFeedback("fail", "カメラ未起動");
+    return;
+  }
+  await runOcrOnCanvas(canvasFromVideo(video), "カメラ静止画OCR");
+}
+
+async function readPhotoFile(event) {
+  const file = event.target.files?.[0];
+  event.target.value = "";
+  if (!file) return;
+  try {
+    $("#scanStatus").textContent = "写真を読み込み中。住所部分が大きく写っているか確認します";
+    showScanFeedback("retry", "写真読取中");
+    setScanProgress("写真準備中", 12);
+    const canvas = await canvasFromImageFile(file);
+    await runOcrOnCanvas(canvas, "写真OCR");
+  } catch (error) {
+    $("#scanStatus").textContent = "写真を読み込めませんでした。もう一度撮影してください";
+    addOcrAttempt({ ok: false, code: `OCR-${String(ocrAttempts.length + 1).padStart(4, "0")}`, confidence: 0, reason: "写真読込失敗", raw: error?.message || "Photo error" });
+    showScanFeedback("fail", "写真失敗");
+    setScanProgress("写真読込失敗", 100);
+  }
+}
+
+function clearWorkdayReadData() {
+  ocrReadCount = 0;
+  ocrAttempts = [];
+  lastScanReads = [];
+  lastScanGroups = [];
+  activeMapRoute = [];
+  renderOcrReadList();
+  updateScanCounter({ read: 0, target: scanTargetCount(), confirmed: 0, retry: 0, duplicate: 0 });
+  setScanProgress("業務終了・読取データ消去済み", 0);
+  showScanFeedback("ok", "消去済み");
+  $("#scanStatus").textContent = "今日の読取データを消去しました。次の業務は新しく読み取り開始できます";
+  $("#videoScanCount").textContent = "未読取";
+  $("#videoRouteSummary").textContent = "写真またはカメラで住所を読み取ると、件数・リスト・ルートへ反映します";
+  $("#ocrProofPanel").hidden = true;
+  $("#doubleScanPanel").hidden = true;
+  $("#rawScanLog").hidden = true;
+  $("#scanResultGrid").innerHTML = "";
+  $("#scanMapStatus").textContent = "読取データ消去済み";
+  renderScanDetailMap([], []);
 }
 
 function preventCameraZoomGestures() {
@@ -2743,6 +2807,9 @@ $("#bufferMinutes").addEventListener("input", renderAll);
 });
 $("#startCamera").addEventListener("click", startCamera);
 $("#captureParcel").addEventListener("click", captureParcel);
+$("#photoReadButton").addEventListener("click", () => $("#photoReadInput")?.click());
+$("#photoReadInput").addEventListener("change", readPhotoFile);
+$("#clearWorkdayData").addEventListener("click", clearWorkdayReadData);
 $("#bulkVideoScan").addEventListener("click", bulkVideoScan);
 $("#bulk400Scan").addEventListener("click", bulk400Scan);
 $("#asklPagesTest").addEventListener("click", runAsklPagesTest);

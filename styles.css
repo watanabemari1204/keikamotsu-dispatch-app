@@ -1721,6 +1721,14 @@ video {
   background: #d83b3b;
 }
 
+.scan-retention {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 850;
+  line-height: 1.45;
+}
+
 .ocr-proof-panel {
   display: grid;
   gap: 8px;
