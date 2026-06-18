@@ -2461,7 +2461,7 @@ function addressScore(address = "") {
   const hasPostal = /〒?\d{3}-?\d{4}/.test(address);
   const hasTokyoMinato = /東京都?港区|港区/.test(address);
   const hasTargetArea = /(芝|三田)\s*[一二三123１２３]\s*丁目/.test(address);
-  const hasBlock = /\d{1,2}-\d{1,2}/.test(address);
+  const hasBlock = /\d{1,2}\s*[-\/\s]\s*\d{1,2}/.test(address);
   return [hasPostal, hasTokyoMinato, hasTargetArea, hasBlock, Boolean(address)].filter(Boolean).length;
 }
 
@@ -2470,10 +2470,17 @@ function extractDeliveryRowsFromText(text = "") {
   const lines = sourceText.split(/\r?\n/).map(normalizeDeliveryLine).filter(Boolean);
   const seen = new Set();
   const candidates = [];
-  const addressStart = /(?:〒\d{3}-?\d{4}\s*)?(?:東京都)?\s*港区\s*(?:芝|三田)\s*[一二三123１２３]\s*丁目\s*\d{1,2}\s*-\s*\d{1,2}(?:\s*-\s*\d{1,2})?/g;
-  const linePattern = /((?:〒\d{3}-?\d{4}\s*)?(?:東京都)?\s*港区\s*(?:芝|三田)\s*[一二三123１２３]\s*丁目\s*\d{1,2}\s*-\s*\d{1,2}(?:\s*-\s*\d{1,2})?)(.*)$/;
+  const blockSeparator = "[-/\\sーｰ]";
+  const blockPattern = `\\d{1,2}\\s*${blockSeparator}\\s*\\d{1,2}(?:\\s*${blockSeparator}\\s*\\d{1,2})?|\\d{3,4}`;
+  const addressStart = new RegExp(`(?:〒\\d{3}-?\\d{4}\\s*)?(?:東京都)?\\s*港\\s*区\\s*(?:芝|三田)\\s*[一二三123１２３]\\s*丁目\\s*(?:${blockPattern})`, "g");
+  const linePattern = new RegExp(`((?:〒\\d{3}-?\\d{4}\\s*)?(?:東京都)?\\s*港\\s*区\\s*(?:芝|三田)\\s*[一二三123１２３]\\s*丁目\\s*(?:${blockPattern}))(.*)$`);
   const normalizeSegment = (segment = "") => normalizeAddressText(segment
     .replace(/\s*-\s*/g, "-")
+    .replace(/(\d{1,2})\s*[\/ーｰ]\s*(\d{1,2})/g, "$1-$2")
+    .replace(/丁目\s*(\d{1,2})\s+(\d{1,2})/g, "丁目$1-$2")
+    .replace(/丁目\s*(\d{1,2})(\d{2})(?=\D|$)/g, "丁目$1-$2")
+    .replace(/丁目\s*(\d{2})(\d{2})(?=\D|$)/g, "丁目$1-$2")
+    .replace(/港\s+区/g, "港区")
     .replace(/港区\s+/g, "港区")
     .replace(/(芝|三田)\s+([一二三123１２３])/g, "$1$2")
     .replace(/([一二三123１２３])\s+丁目/g, "$1丁目")
