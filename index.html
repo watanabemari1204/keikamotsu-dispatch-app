@@ -16,7 +16,7 @@
       integrity="sha256-p4NxAoJBhIINfQvQbM+TgGyEoYOY0O5pYf67R7sQ4hA="
       crossorigin=""
     />
-    <link rel="stylesheet" href="./styles.css?v=liveocr52" />
+    <link rel="stylesheet" href="./styles.css?v=ocrproof53" />
   </head>
   <body>
     <div class="app-shell">
@@ -374,6 +374,18 @@
                 <b>○</b>
                 <span>読取待機中</span>
               </div>
+              <div class="ocr-proof-panel" id="ocrProofPanel" hidden>
+                <strong>カメラ住所読取テスト</strong>
+                <span id="ocrProofJudge">まだ判定していません</span>
+                <dl>
+                  <dt>抽出住所</dt>
+                  <dd id="ocrProofAddress">-</dd>
+                  <dt>信頼度</dt>
+                  <dd id="ocrProofConfidence">-</dd>
+                  <dt>生OCR</dt>
+                  <dd id="ocrProofRaw">-</dd>
+                </dl>
+              </div>
               <div class="scan-capacity">
                 <strong id="scanCapacityTitle">最大400個まで連続読取</strong>
                 <p id="scanTimeGuide">目安: 400個は約160〜200秒。60秒ずつ3〜4本に分けると安定します。</p>
@@ -438,16 +450,16 @@
             <section class="scan-card video-route-card">
               <div class="section-head">
                 <div>
-                  <span class="section-kicker">Video OCR Route</span>
-                  <h3>映像読取からルート提示</h3>
+                  <span class="section-kicker">Camera Route Test</span>
+                  <h3>カメラ読取テストからルート提示</h3>
                 </div>
                 <strong id="videoScanCount">未読取</strong>
               </div>
               <div class="video-route-summary" id="videoRouteSummary">
-                カメラで荷札を流すと、住所・個数・締切を読み取り、三田一丁目/芝三丁目/勝島帰庫の条件でルート案を作ります。
+                カメラ接続と住所読取を分けて確認します。400件の確実な検証は ASKL Pages 400件テストで行います。
               </div>
               <div class="ocr-note">
-                動画OCRは本番API接続前の診断モードです。現時点で確実に400件を読ませるテストは、ASKL Pages 400件テストを使います。
+                カメラが映っても、住所が読めたとは限りません。読取チェックで1件ずつ確認し、400件テストはASKL Pagesボタンを使います。
               </div>
               <div class="scan-map-panel">
                 <div class="scan-map-head">
@@ -606,8 +618,8 @@
       crossorigin=""
     ></script>
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-    <script src="./askl-test-data.js?v=liveocr52"></script>
-    <script src="./app.js?v=liveocr52"></script>
+    <script src="./askl-test-data.js?v=ocrproof53"></script>
+    <script src="./app.js?v=ocrproof53"></script>
     <script>
       if ("serviceWorker" in navigator && location.protocol !== "file:") {
         window.addEventListener("load", () => {

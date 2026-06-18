@@ -1721,6 +1721,53 @@ video {
   background: #d83b3b;
 }
 
+.ocr-proof-panel {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+  border: 1px solid #d6e1ea;
+  border-left: 4px solid #b98900;
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: #fffdf7;
+}
+
+.ocr-proof-panel.ok {
+  border-left-color: #138a55;
+  background: #f3fbf7;
+}
+
+.ocr-proof-panel.fail {
+  border-left-color: #d83b3b;
+  background: #fff7f7;
+}
+
+.ocr-proof-panel strong,
+.ocr-proof-panel span {
+  display: block;
+}
+
+.ocr-proof-panel dl {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 6px 8px;
+  margin: 0;
+}
+
+.ocr-proof-panel dt {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.ocr-proof-panel dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 850;
+}
+
 .scan-capacity {
   display: grid;
   gap: 10px;

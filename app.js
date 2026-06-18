@@ -2329,29 +2329,29 @@ function runTripleScanSimulation() {
 function bulkVideoScan() {
   setScanProgress("動画OCR診断中", 45);
   updateScanCounter({ read: 0, target: scanTargetCount(), confirmed: 0, retry: scanTargetCount(), duplicate: 0 });
-  showScanFeedback("fail", "動画OCR未接続");
-  $("#scanStatus").textContent = "このプロトタイプは動画OCR API未接続です。実荷札の連続読取はまだ確定判定できません";
-  $("#videoScanCount").textContent = "動画OCR未接続";
-  $("#videoRouteSummary").textContent = "現時点の動画ボタンは本物のOCR読取ではありません。400件の実データ検証は ASKL Pages 400件テストで行い、本番化では動画フレーム抽出、OCR、住所正規化、重複判定、低信頼再読取を接続します。";
+  showScanFeedback("retry", "カメラ確認");
+  $("#scanStatus").textContent = "カメラは確認できます。住所を読めたかは読取チェックで判定します";
+  $("#videoScanCount").textContent = "カメラ確認";
+  $("#videoRouteSummary").textContent = "カメラ接続と住所読取は別です。住所が読めた時だけ件数が増えます。400件まとめて検証する場合は ASKL Pages 400件テストを使ってください。";
   const panel = $("#doubleScanPanel");
   if (panel) {
     panel.hidden = false;
     panel.innerHTML = `
       <div class="double-scan-head">
         <div>
-          <span class="section-kicker">OCR Check</span>
-          <strong>動画OCRは本番API未接続</strong>
+          <span class="section-kicker">Camera Check</span>
+          <strong>カメラ接続と住所読取を分けて確認</strong>
         </div>
-        <b>要接続</b>
+        <b>確認中</b>
       </div>
       <div class="double-scan-result">
-        <strong>今の動画ボタンだけでは、400件を正しく読めた判定はできません</strong>
-        <span>必要な処理: 動画フレーム抽出、OCR、ASKL番号照合、住所正規化、重複除去、低信頼だけ2回目/3回目の再読取。</span>
-        <span>この画面で正しくテストする場合は、ASKL Pages 400件テストを押してください。抽出済み400件で地図・車ナビ・徒歩順・赤黄青まで検証します。</span>
+        <strong>住所が読めた時だけ、読取件数が増えます</strong>
+        <span>カメラが映るだけでは読取完了ではありません。住所を大きく映して、読取チェックを押してください。</span>
+        <span>400件まとめて検証する場合は、ASKL Pages 400件テストを押してください。</span>
       </div>
     `;
   }
-  setScanProgress("動画OCRは未接続・ASKLテスト推奨", 100);
+  setScanProgress("カメラ確認完了・読取チェックへ", 100);
 }
 
 function normalizeOcrText(text = "") {
@@ -2365,7 +2365,24 @@ function extractAddressFromOcr(text = "") {
   const normalized = normalizeOcrText(text);
   const code = normalized.match(/ASKL-?\d{3,4}|K-?\d{3,4}/i)?.[0]?.toUpperCase().replace(/([A-Z]+)-?(\d+)/, "$1-$2") || `OCR-${String(ocrReadCount + 1).padStart(4, "0")}`;
   const address = normalized.match(/(?:〒\d{3}-?\d{4})?東京都港区(?:芝|三田)[一二三123１２３]丁目\d{1,2}-\d{1,2}/)?.[0] || "";
-  return { code, address };
+  const hasPostal = /〒?\d{3}-?\d{4}/.test(normalized);
+  const hasTokyoMinato = /東京都?港区|港区/.test(normalized);
+  const hasTargetArea = /(芝|三田)[一二三123１２３]丁目/.test(normalized);
+  const hasBlock = /\d{1,2}-\d{1,2}/.test(normalized);
+  const score = [hasPostal, hasTokyoMinato, hasTargetArea, hasBlock, Boolean(address)].filter(Boolean).length;
+  return { code, address, score, normalized };
+}
+
+function renderOcrProof({ ok = false, address = "", confidence = 0, raw = "", reason = "" } = {}) {
+  const panel = $("#ocrProofPanel");
+  if (!panel) return;
+  panel.hidden = false;
+  panel.classList.toggle("ok", ok);
+  panel.classList.toggle("fail", !ok);
+  $("#ocrProofJudge").textContent = ok ? "判定OK: 住所を読めました" : `判定NG: ${reason || "住所を特定できません"}`;
+  $("#ocrProofAddress").textContent = address || "-";
+  $("#ocrProofConfidence").textContent = `${Math.round(confidence)}%`;
+  $("#ocrProofRaw").textContent = raw ? raw.replace(/\s+/g, " ").slice(0, 220) : "-";
 }
 
 function canvasFromVideo(video) {
@@ -2387,8 +2404,8 @@ async function captureParcel() {
     return;
   }
   if (!window.Tesseract) {
-    $("#scanStatus").textContent = "OCRライブラリを読み込めません。ネット接続後に再読込するか、ASKL Pages 400件テストで検証してください";
-    showScanFeedback("fail", "OCR読込不可");
+    $("#scanStatus").textContent = "文字読取の部品を読み込めません。再読込するか、ASKL Pages 400件テストで検証してください";
+    showScanFeedback("fail", "読取準備不可");
     return;
   }
   try {
@@ -2402,10 +2419,14 @@ async function captureParcel() {
         }
       }
     });
-    const extracted = extractAddressFromOcr(result.data?.text || "");
-    if (!extracted.address) {
+    const rawText = result.data?.text || "";
+    const confidence = result.data?.confidence || 0;
+    const extracted = extractAddressFromOcr(rawText);
+    const ok = Boolean(extracted.address) && extracted.score >= 4 && confidence >= 35;
+    if (!ok) {
       updateScanCounter({ read: ocrReadCount, target: scanTargetCount(), confirmed: ocrReadCount, retry: 1, duplicate: 0 });
       $("#scanStatus").textContent = "住所を読めませんでした。画面の反射を避け、住所を大きく映して再読取してください";
+      renderOcrProof({ ok: false, address: extracted.address, confidence, raw: rawText, reason: extracted.address ? "信頼度が低いです" : "住所形式が見つかりません" });
       showScanFeedback("retry", "再読取");
       setScanProgress("住所未検出", 100);
       return;
@@ -2414,6 +2435,7 @@ async function captureParcel() {
     updateScanCounter({ read: ocrReadCount, target: scanTargetCount(), confirmed: ocrReadCount, retry: 0, duplicate: 0 });
     $("#scanStatus").textContent = `OCR読取OK: ${extracted.code} / ${extracted.address}`;
     $("#videoScanCount").textContent = `${ocrReadCount}件OCR読取`;
+    renderOcrProof({ ok: true, address: extracted.address, confidence, raw: rawText });
     showScanFeedback("ok", `${ocrReadCount}件目OK`);
     setScanProgress("OCR読取OK", 100);
   } catch (error) {
