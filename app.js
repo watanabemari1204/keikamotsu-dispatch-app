@@ -1494,9 +1494,11 @@ async function startCamera() {
     const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false });
     video.srcObject = stream;
     await video.play();
-    status.textContent = "カメラ起動中。荷札のバーコードや住所を枠内へ";
+    status.textContent = "カメラ起動中。住所OCRは未接続のため、現時点では読取診断のみ";
+    showScanFeedback("retry", "OCR未接続");
   } catch (error) {
     status.textContent = "カメラを利用できません。デモ読取で確認できます";
+    showScanFeedback("fail", "カメラ不可");
   }
 }
 
@@ -2349,11 +2351,26 @@ function bulkVideoScan() {
 }
 
 function captureParcel() {
-  if ("BarcodeDetector" in window) {
-    $("#scanStatus").textContent = "バーコード検出に対応。実装時は伝票番号を配送APIへ照会";
-  } else {
-    demoScan();
-  }
+  $("#scanStatus").textContent = "住所OCR未接続です。パソコン画面の住所はまだ実読取できません。ASKL Pages 400件テストで検証してください";
+  $("#videoScanCount").textContent = "実OCR未接続";
+  updateScanCounter({ read: 0, target: scanTargetCount(), confirmed: 0, retry: scanTargetCount(), duplicate: 0 });
+  showScanFeedback("fail", "住所OCR未接続");
+}
+
+function preventCameraZoomGestures() {
+  const stopGesture = (event) => {
+    if (event.target.closest?.(".camera-frame")) event.preventDefault();
+  };
+  ["gesturestart", "gesturechange", "gestureend"].forEach((name) => {
+    document.addEventListener(name, stopGesture, { passive: false });
+  });
+  let lastTouchEnd = 0;
+  document.addEventListener("touchend", (event) => {
+    if (!event.target.closest?.(".camera-frame")) return;
+    const now = Date.now();
+    if (now - lastTouchEnd <= 320) event.preventDefault();
+    lastTouchEnd = now;
+  }, { passive: false });
 }
 
 function startVoice() {
@@ -2602,3 +2619,4 @@ $("#openMaps").addEventListener("click", openMaps);
 
 renderAll();
 renderScanCapacity();
+preventCameraZoomGestures();

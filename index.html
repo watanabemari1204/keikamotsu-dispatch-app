@@ -2,7 +2,7 @@
 <html lang="ja">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
     <meta name="theme-color" content="#111820" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="港区配送" />
@@ -16,7 +16,7 @@
       integrity="sha256-p4NxAoJBhIINfQvQbM+TgGyEoYOY0O5pYf67R7sQ4hA="
       crossorigin=""
     />
-    <link rel="stylesheet" href="./styles.css?v=scanok50" />
+    <link rel="stylesheet" href="./styles.css?v=camerafix51" />
   </head>
   <body>
     <div class="app-shell">
@@ -358,7 +358,7 @@
                 <div class="scan-status" id="scanStatus">荷札を枠内に合わせてください</div>
               </div>
               <div class="scan-actions">
-                <button class="secondary-button" id="captureParcel" type="button">読み取り</button>
+                <button class="secondary-button" id="captureParcel" type="button">読取チェック</button>
                 <button class="secondary-button" id="bulkVideoScan" type="button">動画OCR診断</button>
                 <button class="ghost-button" id="demoScan" type="button">デモ読取</button>
               </div>
@@ -605,8 +605,8 @@
       integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
       crossorigin=""
     ></script>
-    <script src="./askl-test-data.js?v=scanok50"></script>
-    <script src="./app.js?v=scanok50"></script>
+    <script src="./askl-test-data.js?v=camerafix51"></script>
+    <script src="./app.js?v=camerafix51"></script>
     <script>
       if ("serviceWorker" in navigator && location.protocol !== "file:") {
         window.addEventListener("load", () => {
