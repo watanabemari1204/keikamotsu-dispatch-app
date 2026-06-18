@@ -2460,20 +2460,28 @@ function ocrCodeNear(normalized = "", index = 0, fallbackIndex = 1) {
 function addressScore(address = "") {
   const hasPostal = /〒?\d{3}-?\d{4}/.test(address);
   const hasTokyoMinato = /東京都?港区|港区/.test(address);
-  const hasTargetArea = /(芝|三田)[一二三123１２３]丁目/.test(address);
+  const hasTargetArea = /(芝|三田)\s*[一二三123１２３]\s*丁目/.test(address);
   const hasBlock = /\d{1,2}-\d{1,2}/.test(address);
   return [hasPostal, hasTokyoMinato, hasTargetArea, hasBlock, Boolean(address)].filter(Boolean).length;
 }
 
 function extractDeliveryRowsFromText(text = "") {
-  const lines = text.split(/\r?\n/).map(normalizeDeliveryLine).filter(Boolean);
+  const sourceText = normalizeDeliveryLine(text);
+  const lines = sourceText.split(/\r?\n/).map(normalizeDeliveryLine).filter(Boolean);
   const seen = new Set();
   const candidates = [];
-  const linePattern = /((?:〒\d{3}-?\d{4}\s*)?(?:東京都)?港区(?:芝|三田)[一二三123１２３]丁目\d{1,2}-\d{1,2}(?:-\d{1,2})?)(.*)$/;
+  const addressStart = /(?:〒\d{3}-?\d{4}\s*)?(?:東京都)?\s*港区\s*(?:芝|三田)\s*[一二三123１２３]\s*丁目\s*\d{1,2}\s*-\s*\d{1,2}(?:\s*-\s*\d{1,2})?/g;
+  const linePattern = /((?:〒\d{3}-?\d{4}\s*)?(?:東京都)?\s*港区\s*(?:芝|三田)\s*[一二三123１２３]\s*丁目\s*\d{1,2}\s*-\s*\d{1,2}(?:\s*-\s*\d{1,2})?)(.*)$/;
+  const normalizeSegment = (segment = "") => normalizeAddressText(segment
+    .replace(/\s*-\s*/g, "-")
+    .replace(/港区\s+/g, "港区")
+    .replace(/(芝|三田)\s+([一二三123１２３])/g, "$1$2")
+    .replace(/([一二三123１２３])\s+丁目/g, "$1丁目")
+    .trim());
   const pushCandidate = (line, lineIndex) => {
     const match = line.match(linePattern);
     if (!match) return false;
-    const deliveryLine = normalizeAddressText(`${match[1]}${match[2] || ""}`.trim());
+    const deliveryLine = normalizeSegment(`${match[1]}${match[2] || ""}`);
     if (seen.has(deliveryLine)) return true;
     seen.add(deliveryLine);
     candidates.push({
@@ -2485,19 +2493,22 @@ function extractDeliveryRowsFromText(text = "") {
     });
     return true;
   };
-  lines.forEach(pushCandidate);
-  if (candidates.length <= 1) {
-    const flattened = normalizeDeliveryLine(text).replace(/\s+/g, " ");
-    const addressStart = /(?:〒\d{3}-?\d{4}\s*)?(?:東京都)?港区(?:芝|三田)[一二三123１２３]丁目\d{1,2}-\d{1,2}(?:-\d{1,2})?/g;
+
+  const splitByAddressStarts = (value = "", baseIndex = 0) => {
+    const textValue = normalizeDeliveryLine(value).replace(/\s+/g, " ");
     const starts = [];
     let match;
-    while ((match = addressStart.exec(flattened)) !== null) starts.push(match.index);
+    addressStart.lastIndex = 0;
+    while ((match = addressStart.exec(textValue)) !== null) starts.push(match.index);
     starts.forEach((start, index) => {
-      const end = starts[index + 1] ?? flattened.length;
-      const segment = flattened.slice(start, end).trim();
-      pushCandidate(segment, index);
+      const end = starts[index + 1] ?? textValue.length;
+      const segment = textValue.slice(start, end).trim();
+      pushCandidate(segment, baseIndex + index);
     });
-  }
+  };
+
+  lines.forEach((line, index) => splitByAddressStarts(line, index * 100));
+  splitByAddressStarts(sourceText.replace(/\r?\n/g, " "), 10000);
   return candidates;
 }
 
